@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Creole Translator</string>
+    <string name="record_start">Tap to Record</string>
+    <string name="record_stop">Tap to Stop</string>
+    <string name="processing">Processing…</string>
+    <string name="switch_direction">Switch Direction</string>
+    <string name="history_title">Translation History</string>
+    <string name="no_history">No translation history yet</string>
+    <string name="permission_required">Microphone permission is required to record audio</string>
+</resources>
