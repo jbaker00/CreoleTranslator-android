@@ -1,0 +1,2 @@
+json_key_file("/Users/jamesbaker/play-store-key.json")
+package_name("com.creole.translator")

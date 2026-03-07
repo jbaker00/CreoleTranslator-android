@@ -1,0 +1,18 @@
+Creole Translator is a fast, accurate voice translation app for Haitian Creole and English speakers.
+
+🎙️ SPEAK — Just tap and talk. Your voice is transcribed and translated instantly.
+🔄 TWO DIRECTIONS — Translate from Haitian Creole to English or English to Haitian Creole with one tap.
+🔊 LISTEN — Tap the speaker icon to hear the translation read aloud in the target language.
+📋 HISTORY — Review all your past translations and replay them anytime.
+
+HOW IT WORKS
+Creole Translator uses state-of-the-art AI (Whisper speech recognition + Llama translation) to deliver natural, fluent translations — not stiff word-for-word substitutions.
+
+PERFECT FOR
+• Haitian families communicating across language barriers
+• Healthcare workers, social workers, and educators serving Haitian communities
+• Travelers visiting Haiti
+• Anyone learning Haitian Creole
+
+PRIVACY
+Audio is processed securely and is not stored after translation. See our privacy policy for full details.
