@@ -1,0 +1,4 @@
+- Initial release of Creole Translator
+- Voice translation between Haitian Creole and English
+- Translation history
+- Text-to-speech playback
