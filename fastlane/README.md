@@ -15,6 +15,14 @@ For _fastlane_ installation instructions, see [Installing _fastlane_](https://do
 
 ## Android
 
+### android upload_images
+
+```sh
+[bundle exec] fastlane android upload_images
+```
+
+Upload store listing images only (no AAB)
+
 ### android upload_internal
 
 ```sh
