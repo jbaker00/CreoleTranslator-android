@@ -32,6 +32,21 @@ class GroqService {
 
     fun isApiKeyValid(): Boolean = apiKey.isNotBlank() && apiKey != "YOUR_API_KEY_HERE"
 
+    suspend fun processText(
+        text: String,
+        direction: TranslationDirection
+    ): TranslationResult = withContext(Dispatchers.IO) {
+        if (!isApiKeyValid()) throw GroqError.InvalidApiKey
+
+        val translation = translateText(text, direction)
+
+        TranslationResult(
+            transcription = text,
+            translation = translation,
+            direction = direction
+        )
+    }
+
     suspend fun processAudio(
         audioFile: File,
         direction: TranslationDirection
@@ -131,13 +146,13 @@ class GroqService {
         }
     }
 
-    suspend fun synthesizeSpeech(text: String): ByteArray = withContext(Dispatchers.IO) {
+    suspend fun synthesizeSpeech(text: String, voice: String = "diana"): ByteArray = withContext(Dispatchers.IO) {
         if (!isApiKeyValid()) throw GroqError.InvalidApiKey
 
         val requestJson = JSONObject().apply {
             put("model", "canopylabs/orpheus-v1-english")
             put("input", text.take(200))  // API limit is 200 characters
-            put("voice", "diana")
+            put("voice", voice)
             put("response_format", "wav")
         }
 

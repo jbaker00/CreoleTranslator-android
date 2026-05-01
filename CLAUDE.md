@@ -2,6 +2,10 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Cross-Platform Sync
+
+**Always read `FEATURE_PARITY.md` before making any code changes.** It lists every shared feature, the file paths in both the Android and iOS repos, key constants (models, API keys), and a checklist for adding new features. The iOS repo is at `/Users/jamesbaker/code/CreoleTranslator-iOS`.
+
 ## Build Commands
 
 ```bash

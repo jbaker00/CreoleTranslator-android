@@ -17,7 +17,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.creole.translator.model.TranslationDirection
@@ -38,12 +37,15 @@ fun MainScreen(viewModel: MainViewModel) {
     val isSpeaking by viewModel.isSpeaking.collectAsState()
     val ttsError by viewModel.ttsError.collectAsState()
     val historyEntries by viewModel.historyEntries.collectAsState()
+    val inputMode by viewModel.inputMode.collectAsState()
+    val typedInput by viewModel.typedInput.collectAsState()
 
     Scaffold(
         topBar = {
             AppHeader(
                 historyCount = historyEntries.size,
-                onHistoryClick = { viewModel.showHistory() }
+                onHistoryClick = { viewModel.showHistory() },
+                onSettingsClick = { viewModel.showSettings() }
             )
         },
         bottomBar = { BannerAd() },
@@ -61,12 +63,29 @@ fun MainScreen(viewModel: MainViewModel) {
             // Direction indicator
             DirectionIndicator(direction)
 
-            // Record button
-            RecordButton(
-                isRecording = isRecording,
-                isProcessing = isProcessing,
-                onClick = { viewModel.toggleRecording() }
+            // Voice / Text input mode picker
+            InputModePicker(
+                inputMode = inputMode,
+                enabled = !isRecording && !isProcessing,
+                onModeChange = { viewModel.setInputMode(it) }
             )
+
+            // Input control — record button or text field
+            if (inputMode == InputMode.VOICE) {
+                RecordButton(
+                    isRecording = isRecording,
+                    isProcessing = isProcessing,
+                    onClick = { viewModel.toggleRecording() }
+                )
+            } else {
+                TextInputSection(
+                    text = typedInput,
+                    direction = direction,
+                    isProcessing = isProcessing,
+                    onTextChange = { viewModel.setTypedInput(it) },
+                    onTranslate = { viewModel.submitTypedText() }
+                )
+            }
 
             // Status / error messages
             statusMessage?.let { msg ->
@@ -124,7 +143,11 @@ fun MainScreen(viewModel: MainViewModel) {
 }
 
 @Composable
-private fun AppHeader(historyCount: Int, onHistoryClick: () -> Unit) {
+private fun AppHeader(
+    historyCount: Int,
+    onHistoryClick: () -> Unit,
+    onSettingsClick: () -> Unit
+) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -149,7 +172,20 @@ private fun AppHeader(historyCount: Int, onHistoryClick: () -> Unit) {
                 color = Color.White.copy(alpha = 0.85f)
             )
         }
-        // History button top-right
+
+        // Settings button — top-left
+        IconButton(
+            onClick = onSettingsClick,
+            modifier = Modifier.align(Alignment.CenterStart)
+        ) {
+            Icon(
+                Icons.Default.Settings,
+                contentDescription = "Voice Settings",
+                tint = Color.White
+            )
+        }
+
+        // History button — top-right
         BadgedBox(
             badge = {
                 if (historyCount > 0) {
@@ -165,6 +201,90 @@ private fun AppHeader(historyCount: Int, onHistoryClick: () -> Unit) {
                     tint = Color.White
                 )
             }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun InputModePicker(
+    inputMode: InputMode,
+    enabled: Boolean,
+    onModeChange: (InputMode) -> Unit
+) {
+    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+        SegmentedButton(
+            selected = inputMode == InputMode.VOICE,
+            onClick = { onModeChange(InputMode.VOICE) },
+            shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
+            enabled = enabled,
+            icon = {}
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Icon(Icons.Default.Mic, contentDescription = null, modifier = Modifier.size(16.dp))
+                Text("Voice")
+            }
+        }
+        SegmentedButton(
+            selected = inputMode == InputMode.TEXT,
+            onClick = { onModeChange(InputMode.TEXT) },
+            shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
+            enabled = enabled,
+            icon = {}
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Icon(Icons.Default.Keyboard, contentDescription = null, modifier = Modifier.size(16.dp))
+                Text("Type")
+            }
+        }
+    }
+}
+
+@Composable
+private fun TextInputSection(
+    text: String,
+    direction: TranslationDirection,
+    isProcessing: Boolean,
+    onTextChange: (String) -> Unit,
+    onTranslate: () -> Unit
+) {
+    val placeholder = if (direction == TranslationDirection.CREOLE_TO_ENGLISH)
+        "Enter Haitian Creole text…"
+    else
+        "Enter English text…"
+
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        OutlinedTextField(
+            value = text,
+            onValueChange = onTextChange,
+            placeholder = { Text(placeholder) },
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 100.dp, max = 180.dp),
+            enabled = !isProcessing,
+            maxLines = 6,
+            shape = RoundedCornerShape(12.dp)
+        )
+
+        Button(
+            onClick = onTranslate,
+            enabled = text.trim().isNotEmpty() && !isProcessing,
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(12.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = BrandPurple)
+        ) {
+            Icon(Icons.Default.Translate, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(8.dp))
+            Text("Translate", fontWeight = FontWeight.SemiBold)
         }
     }
 }
@@ -307,7 +427,7 @@ private fun ResultCard(
                     )
                 }
             }
-            Divider(modifier = Modifier.padding(vertical = 4.dp))
+            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
             if (text == null) {
                 LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
             } else {

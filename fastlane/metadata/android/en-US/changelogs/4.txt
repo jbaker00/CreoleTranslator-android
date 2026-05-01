@@ -1,0 +1,4 @@
+- New voice options: choose from 6 natural-sounding voices for both Haitian Creole and English
+- Playback speed control: slow down or speed up voice output for each language
+- Improved text-to-speech quality using OpenAI voices for both languages
+- Voice settings now include test buttons to preview your selected voice

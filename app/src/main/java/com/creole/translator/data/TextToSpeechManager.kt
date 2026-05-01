@@ -2,16 +2,13 @@ package com.creole.translator.data
 
 import android.content.Context
 import android.media.AudioAttributes
-import android.media.AudioFormat
-import android.media.AudioManager
-import android.media.AudioTrack
 import android.media.MediaPlayer
+import android.media.PlaybackParams
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -24,16 +21,14 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
-import java.nio.ByteBuffer
-import java.nio.ByteOrder
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
 class TextToSpeechManager(
     private val context: Context,
-    private val groqService: GroqService,
     private val scope: CoroutineScope,
-    private val openAiApiKey: String
+    private val openAiApiKey: String,
+    private val voiceSettings: VoiceSettings
 ) {
 
     companion object {
@@ -48,7 +43,6 @@ class TextToSpeechManager(
 
     private var androidTts: TextToSpeech? = null
     private var mediaPlayer: MediaPlayer? = null
-    @Volatile private var audioTrack: AudioTrack? = null
     private var ttsReady = false
 
     private val httpClient = OkHttpClient.Builder()
@@ -69,50 +63,48 @@ class TextToSpeechManager(
     fun speak(text: String, language: String) {
         if (text.isBlank()) return
         stopSpeaking()
+        _lastError.value = null
 
-        when {
-            language == "en" && groqService.isApiKeyValid() -> speakWithGroq(text)
-            language == "ht" && openAiApiKey.isNotBlank() -> speakWithOpenAI(text)
-            else -> speakWithAndroid(text, language)
-        }
-    }
+        val isCreole = language == "ht"
+        val provider = if (isCreole) voiceSettings.creoleProvider.value else voiceSettings.englishProvider.value
+        val speed = if (isCreole) voiceSettings.creolePlaybackSpeed.value else voiceSettings.englishPlaybackSpeed.value
 
-    private fun speakWithGroq(text: String) {
-        scope.launch {
-            _isSpeaking.value = true
-            _lastError.value = null
-            try {
-                Log.d(TAG, "speakWithGroq: requesting Groq TTS for '${text.take(40)}'")
-                val audioData = groqService.synthesizeSpeech(text)
-                Log.d(TAG, "speakWithGroq: received ${audioData.size} bytes, playing audio")
-                playAudioData(audioData, "tts_output.wav")
-            } catch (e: Exception) {
-                Log.e(TAG, "speakWithGroq: failed, falling back to Android TTS", e)
-                speakWithAndroid(text, "en")
+        when (provider) {
+            TTSProvider.OPENAI, TTSProvider.GROQ -> {
+                // GROQ treated as OPENAI (migration compat — Groq TTS removed)
+                val voice = if (isCreole) voiceSettings.openAIVoice.value else voiceSettings.englishOpenAIVoice.value
+                if (openAiApiKey.isNotBlank()) {
+                    speakWithOpenAI(text, voice, speed)
+                } else {
+                    speakWithAndroid(text, language, speed)
+                }
             }
+            TTSProvider.SYSTEM -> speakWithAndroid(text, language, speed)
         }
     }
 
-    private fun speakWithOpenAI(text: String) {
+    private fun speakWithOpenAI(text: String, voice: String, speed: Double) {
         scope.launch {
             _isSpeaking.value = true
-            _lastError.value = null
             try {
-                val audioData = synthesizeWithOpenAI(text)
-                playAudioData(audioData, "tts_output.mp3")
+                // Speed is sent to the OpenAI API directly, so playback rate stays at 1.0
+                val audioData = synthesizeWithOpenAI(text, voice, speed)
+                playAudioData(audioData, "tts_output.mp3", 1.0)
             } catch (e: Exception) {
                 _lastError.value = "OpenAI TTS failed: ${e.message}"
-                speakWithAndroid(text, "ht")
+                speakWithAndroid(text, "ht", speed)
             }
         }
     }
 
-    private suspend fun synthesizeWithOpenAI(text: String): ByteArray = withContext(Dispatchers.IO) {
+    private suspend fun synthesizeWithOpenAI(text: String, voice: String, speed: Double): ByteArray = withContext(Dispatchers.IO) {
+        val clampedSpeed = speed.coerceIn(0.25, 4.0)
         val body = JSONObject().apply {
             put("model", "tts-1")
             put("input", text)
-            put("voice", "alloy")
+            put("voice", voice)
             put("response_format", "mp3")
+            put("speed", clampedSpeed)
         }.toString().toRequestBody("application/json".toMediaType())
 
         val request = Request.Builder()
@@ -129,92 +121,7 @@ class TextToSpeechManager(
         response.body?.bytes() ?: throw Exception("Empty response body")
     }
 
-    private suspend fun playAudioData(data: ByteArray, filename: String) {
-        if (filename.endsWith(".wav")) {
-            playWavWithAudioTrack(data)
-        } else {
-            playMp3WithMediaPlayer(data, filename)
-        }
-    }
-
-    private suspend fun playWavWithAudioTrack(data: ByteArray) = withContext(Dispatchers.IO) {
-        // Walk WAV chunks to find fmt and data
-        var offset = 12
-        var sampleRate = 44100
-        var numChannels = 1
-        var bitsPerSample = 16
-        var dataOffset = -1
-        var dataSize = 0
-
-        while (offset + 8 <= data.size) {
-            val chunkId = String(data, offset, 4)
-            val chunkSize = ByteBuffer.wrap(data, offset + 4, 4).order(ByteOrder.LITTLE_ENDIAN).int
-            when (chunkId) {
-                "fmt " -> {
-                    numChannels  = ByteBuffer.wrap(data, offset + 10, 2).order(ByteOrder.LITTLE_ENDIAN).short.toInt()
-                    sampleRate   = ByteBuffer.wrap(data, offset + 12, 4).order(ByteOrder.LITTLE_ENDIAN).int
-                    bitsPerSample = ByteBuffer.wrap(data, offset + 22, 2).order(ByteOrder.LITTLE_ENDIAN).short.toInt()
-                }
-                "data" -> {
-                    dataOffset = offset + 8
-                    // chunkSize == -1 means 0xFFFFFFFF (unknown/streaming WAV)
-                    dataSize = if (chunkSize < 0) data.size - dataOffset else chunkSize
-                    break
-                }
-            }
-            offset += 8 + chunkSize
-        }
-
-        if (dataOffset < 0) throw Exception("WAV has no data chunk")
-        Log.d(TAG, "WAV: ${sampleRate}Hz ${numChannels}ch ${bitsPerSample}bit, ${dataSize} PCM bytes")
-
-        val channelConfig = if (numChannels == 1) AudioFormat.CHANNEL_OUT_MONO else AudioFormat.CHANNEL_OUT_STEREO
-        val encoding = if (bitsPerSample == 16) AudioFormat.ENCODING_PCM_16BIT else AudioFormat.ENCODING_PCM_8BIT
-        val minBuffer = AudioTrack.getMinBufferSize(sampleRate, channelConfig, encoding)
-
-        val track = AudioTrack(
-            AudioAttributes.Builder()
-                .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
-                .setUsage(AudioAttributes.USAGE_MEDIA)
-                .build(),
-            AudioFormat.Builder()
-                .setSampleRate(sampleRate)
-                .setEncoding(encoding)
-                .setChannelMask(channelConfig)
-                .build(),
-            minBuffer,
-            AudioTrack.MODE_STREAM,
-            AudioManager.AUDIO_SESSION_ID_GENERATE
-        )
-
-        audioTrack = track
-        _isSpeaking.value = true
-        track.play()
-
-        val startMs = System.currentTimeMillis()
-        var written = 0
-        while (written < dataSize && audioTrack === track) {
-            val toWrite = minOf(minBuffer, dataSize - written)
-            val result = track.write(data, dataOffset + written, toWrite)
-            if (result < 0) break
-            written += result
-        }
-
-        // Wait for the remaining buffered audio to finish playing
-        val totalDurationMs = dataSize * 1000L / (sampleRate * numChannels * (bitsPerSample / 8))
-        val elapsed = System.currentTimeMillis() - startMs
-        val remaining = totalDurationMs - elapsed + 300L
-        if (remaining > 0) delay(remaining)
-
-        if (audioTrack === track) {
-            track.stop()
-            track.release()
-            audioTrack = null
-            _isSpeaking.value = false
-        }
-    }
-
-    private suspend fun playMp3WithMediaPlayer(data: ByteArray, filename: String) = withContext(Dispatchers.IO) {
+    private suspend fun playAudioData(data: ByteArray, filename: String, speed: Double) = withContext(Dispatchers.IO) {
         val tempFile = File(context.cacheDir, filename)
         FileOutputStream(tempFile).use { it.write(data) }
 
@@ -229,6 +136,8 @@ class TextToSpeechManager(
                     )
                     setDataSource(tempFile.absolutePath)
                     prepare()
+                    // PlaybackParams speed: 0.5–2.0 is the reliable range on Android
+                    playbackParams = PlaybackParams().setSpeed(speed.toFloat().coerceIn(0.5f, 2.0f))
                     setOnCompletionListener {
                         _isSpeaking.value = false
                         it.release()
@@ -248,8 +157,8 @@ class TextToSpeechManager(
         }
     }
 
-    private fun speakWithAndroid(text: String, language: String) {
-        Log.d(TAG, "speakWithAndroid: using Android TTS, language=$language")
+    private fun speakWithAndroid(text: String, language: String, speed: Double) {
+        Log.d(TAG, "speakWithAndroid: language=$language speed=$speed")
         if (!ttsReady) {
             _lastError.value = "Text-to-speech not available"
             return
@@ -257,11 +166,11 @@ class TextToSpeechManager(
 
         val locale = when (language) {
             "ht" -> Locale.FRENCH  // Closest available locale for Haitian Creole
-            "en" -> Locale.US
             else -> Locale.US
         }
 
         androidTts?.language = locale
+        androidTts?.setSpeechRate(speed.toFloat())
         androidTts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
             override fun onStart(utteranceId: String?) { _isSpeaking.value = true }
             override fun onDone(utteranceId: String?) { _isSpeaking.value = false }
@@ -280,10 +189,6 @@ class TextToSpeechManager(
     }
 
     fun stopSpeaking() {
-        audioTrack?.let {
-            audioTrack = null  // signal the write loop to stop
-            try { it.stop(); it.release() } catch (_: Exception) {}
-        }
         mediaPlayer?.apply {
             if (isPlaying) stop()
             release()

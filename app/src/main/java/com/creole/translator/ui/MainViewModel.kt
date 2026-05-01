@@ -10,27 +10,47 @@ import com.creole.translator.data.AudioRecorder
 import com.creole.translator.data.GroqService
 import com.creole.translator.data.TextToSpeechManager
 import com.creole.translator.data.TranslationHistoryManager
+import com.creole.translator.data.VoiceSettings
 import com.creole.translator.model.GroqError
 import com.creole.translator.model.TranslationDirection
 import com.creole.translator.model.TranslationEntry
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.io.File
 
-enum class Screen { MAIN, HISTORY }
+enum class Screen { MAIN, HISTORY, SETTINGS }
+
+enum class InputMode { VOICE, TEXT }
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val groqService = GroqService()
     private val audioRecorder = AudioRecorder(application)
     private val historyManager = TranslationHistoryManager(application)
-    val ttsManager = TextToSpeechManager(application, groqService, viewModelScope, BuildConfig.OPENAI_API_KEY)
+    val voiceSettings = VoiceSettings(application)
+    val ttsManager = TextToSpeechManager(
+        context = application,
+        scope = viewModelScope,
+        openAiApiKey = BuildConfig.OPENAI_API_KEY,
+        voiceSettings = voiceSettings
+    )
 
     // Navigation
     private val _currentScreen = MutableStateFlow(Screen.MAIN)
     val currentScreen: StateFlow<Screen> = _currentScreen.asStateFlow()
+
+    // Input mode (Voice or Text)
+    private val _inputMode = MutableStateFlow(InputMode.VOICE)
+    val inputMode: StateFlow<InputMode> = _inputMode.asStateFlow()
+
+    // Typed input for text mode
+    private val _typedInput = MutableStateFlow("")
+    val typedInput: StateFlow<String> = _typedInput.asStateFlow()
 
     // Recording state
     private val _isRecording = MutableStateFlow(false)
@@ -65,6 +85,63 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val ttsError = ttsManager.lastError
 
     private var currentRecordingFile: File? = null
+    private var sessionTranslationCount = 0
+
+    private val _interstitialEvent = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val interstitialEvent: SharedFlow<Unit> = _interstitialEvent.asSharedFlow()
+
+    // ── Input mode ──────────────────────────────────────────────────────────
+
+    fun setInputMode(mode: InputMode) {
+        _inputMode.value = mode
+    }
+
+    fun setTypedInput(text: String) {
+        _typedInput.value = text
+    }
+
+    /** Translate the typed text directly (no audio capture). */
+    fun submitTypedText() {
+        val text = _typedInput.value.trim()
+        if (text.isEmpty()) return
+
+        viewModelScope.launch {
+            _isProcessing.value = true
+            _errorMessage.value = null
+            _transcription.value = ""
+            _translation.value = ""
+
+            try {
+                val result = groqService.processText(text, _direction.value)
+                _transcription.value = result.transcription
+                _translation.value = result.translation
+
+                historyManager.addEntry(
+                    sourceText = result.transcription,
+                    translatedText = result.translation,
+                    direction = result.direction
+                )
+
+                _statusMessage.value = "Translation complete"
+                sessionTranslationCount++
+                if (sessionTranslationCount % InterstitialAdManager.INTERSTITIAL_INTERVAL == 0) {
+                    _interstitialEvent.tryEmit(Unit)
+                }
+            } catch (e: GroqError.InvalidApiKey) {
+                _errorMessage.value = "Invalid Groq API key. Please check your configuration."
+            } catch (e: GroqError.TranslationFailed) {
+                _errorMessage.value = "Translation failed: ${e.message}"
+            } catch (e: GroqError.NetworkError) {
+                _errorMessage.value = "Network error: ${e.message}"
+            } catch (e: Exception) {
+                _errorMessage.value = "Error: ${e.message}"
+            } finally {
+                _isProcessing.value = false
+            }
+        }
+    }
+
+    // ── Recording ───────────────────────────────────────────────────────────
 
     fun hasMicPermission(): Boolean {
         return ContextCompat.checkSelfPermission(
@@ -125,6 +202,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 )
 
                 _statusMessage.value = "Translation complete"
+                sessionTranslationCount++
+                if (sessionTranslationCount % InterstitialAdManager.INTERSTITIAL_INTERVAL == 0) {
+                    _interstitialEvent.tryEmit(Unit)
+                }
             } catch (e: GroqError.InvalidApiKey) {
                 _errorMessage.value = "Invalid Groq API key. Please check your configuration."
             } catch (e: GroqError.TranscriptionFailed) {
@@ -142,6 +223,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    // ── Direction ───────────────────────────────────────────────────────────
+
     fun switchDirection() {
         _direction.value = when (_direction.value) {
             TranslationDirection.CREOLE_TO_ENGLISH -> TranslationDirection.ENGLISH_TO_CREOLE
@@ -153,6 +236,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _translation.value = temp
     }
 
+    // ── TTS ─────────────────────────────────────────────────────────────────
+
     fun speakText(text: String, language: String) {
         ttsManager.speak(text, language)
     }
@@ -160,6 +245,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun stopSpeaking() {
         ttsManager.stopSpeaking()
     }
+
+    // ── Misc ─────────────────────────────────────────────────────────────────
 
     fun clearError() {
         _errorMessage.value = null
@@ -170,13 +257,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _statusMessage.value = null
     }
 
-    fun showHistory() {
-        _currentScreen.value = Screen.HISTORY
-    }
+    // ── Navigation ───────────────────────────────────────────────────────────
 
-    fun showMain() {
-        _currentScreen.value = Screen.MAIN
-    }
+    fun showHistory() { _currentScreen.value = Screen.HISTORY }
+    fun showSettings() { _currentScreen.value = Screen.SETTINGS }
+    fun showMain() { _currentScreen.value = Screen.MAIN }
+
+    // ── History ──────────────────────────────────────────────────────────────
 
     fun deleteHistoryEntry(entry: TranslationEntry) {
         historyManager.deleteEntry(entry)
