@@ -18,7 +18,8 @@ Each row describes **what** the feature does and **where** it lives in each code
 | Playback speed control | `VoiceSettings` `englishPlaybackSpeed`/`creolePlaybackSpeed` (MediaPlayer.PlaybackParams + OpenAI speed param) | `VoiceSettings` `englishPlaybackSpeed`/`creolePlaybackSpeed` |
 | Voice selection settings | `ui/SettingsScreen.kt` + `data/VoiceSettings.kt` | `SettingsView.swift` + `VoiceSettings.swift` |
 | Persistent voice preferences | `VoiceSettings` (SharedPreferences) | `VoiceSettings` (@AppStorage / UserDefaults) |
-| Interstitial ads (every 25 translations) | `ui/InterstitialAdManager.kt` + `MainViewModel.interstitialEvent` | `InterstitialAdManager.swift` |
+| Interstitial ads — every 4 translations, max 6/session, ≥120s apart (Android still every 25 — port pending) | `ui/InterstitialAdManager.kt` + `MainViewModel.interstitialEvent` | `InterstitialAdManager.swift` |
+| Rewarded ad — unlock premium voices 24h (free: `diana`, `alloy`; gate at selection; pre-ad confirm dialog "watch a short ad to unlock for 24 hours", post-ad "unlocked for 24 hours" dialog, footer shows hours left; no-fill grants unlock anyway; iOS unit `CreoleTranslatorRewarded` ca-app-pub-7871017136061682/5611090338, DEBUG builds use Google test unit; Android port pending) | — | `RewardedAdManager.swift` + `VoiceSettings.swift` + `SettingsView.swift` |
 | Translation history (max 50) | `data/TranslationHistoryManager.kt` + `ui/HistoryScreen.kt` | `TranslationHistory.swift` + `HistoryView.swift` |
 | Banner ads | `ui/BannerAd.kt` | `BannerAdView.swift` |
 | Result cards with speak buttons | `MainScreen.ResultCard` | `ContentView.ResultCard` |
