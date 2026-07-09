@@ -11,7 +11,7 @@ Each row describes **what** the feature does and **where** it lives in each code
 | Text input mode (type to translate) | `ui/MainScreen.kt` `TextInputSection` + `MainViewModel.submitTypedText()` | `ContentView.swift` `InputMode.text` + `processTextInput()` |
 | Direction switcher (Creole↔English) | `MainViewModel.switchDirection()` | `ContentView.translationDirection` |
 | Translation via Groq Llama 3.3-70b | `data/GroqService.translateText()` | `GroqService.translateText()` |
-| TTS — English via Groq Orpheus | `data/TextToSpeechManager.speakWithGroq()` | `TextToSpeechManager.speak(language:en)` |
+| TTS — English via Groq Orpheus | removed — GROQ provider setting falls back to OpenAI proxy TTS (`TextToSpeechManager.speak()`) | via api-proxy `/v1/tts-groq` (`{text, voice}` → WAV) in `TextToSpeechManager.speak(language:en)` |
 | TTS — Creole via OpenAI tts-1 | `data/TextToSpeechManager.speakWithOpenAI()` | `TextToSpeechManager.speak(language:ht)` |
 | TTS — device synthesizer fallback | `TextToSpeechManager.speakWithAndroid()` | `TextToSpeechManager.speakNatively()` |
 | Per-language TTS provider selection | `data/VoiceSettings` `englishProvider`/`creoleProvider` | `VoiceSettings` `englishProvider`/`creoleProvider` |
@@ -29,12 +29,12 @@ Each row describes **what** the feature does and **where** it lives in each code
 
 | Constant | Android (`BuildConfig`) | iOS (`Secrets`) |
 |----------|------------------------|-----------------|
-| Groq API key | `GROQ_API_KEY` in `local.properties` | `GROQ_API_KEY` in `Secrets.plist` |
-| OpenAI API key | `OPENAI_API_KEY` in `local.properties` | `OPENAI_API_KEY` in `Secrets.plist` |
+| Groq API key | none in app — transcribe/translate go through api-proxy: `/v1/transcribe` (raw m4a body + `x-language` header → `{text}`), `/v1/translate` (`{text, direction: "ht-en"\|"en-ht"}` → `{translation}`) | same proxy routes (`GroqService.swift`) |
+| OpenAI TTS | via api-proxy Cloud Function (no key in app): `https://us-central1-jbaker-api-proxy.cloudfunctions.net/api/v1/tts`, `x-device-id` header, payload `{text, voice, speed}` | same proxy URL/protocol |
 | Whisper model | `whisper-large-v3` | `whisper-large-v3` |
 | LLM model | `llama-3.3-70b-versatile` | `llama-3.3-70b-versatile` |
 | Groq TTS model | `canopylabs/orpheus-v1-english` | `canopylabs/orpheus-v1-english` |
-| OpenAI TTS model | `tts-1` | `tts-1` |
+| OpenAI TTS model | `tts-1` (pinned server-side in api-proxy) | `tts-1` (pinned server-side in api-proxy) |
 
 ## Voice Options (keep in sync)
 

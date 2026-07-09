@@ -5,7 +5,6 @@ import android.content.pm.PackageManager
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.creole.translator.BuildConfig
 import com.creole.translator.data.AudioRecorder
 import com.creole.translator.data.GroqService
 import com.creole.translator.data.TextToSpeechManager
@@ -29,14 +28,13 @@ enum class InputMode { VOICE, TEXT }
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
 
-    private val groqService = GroqService()
+    private val groqService = GroqService(application)
     private val audioRecorder = AudioRecorder(application)
     private val historyManager = TranslationHistoryManager(application)
     val voiceSettings = VoiceSettings(application)
     val ttsManager = TextToSpeechManager(
         context = application,
         scope = viewModelScope,
-        openAiApiKey = BuildConfig.OPENAI_API_KEY,
         voiceSettings = voiceSettings
     )
 

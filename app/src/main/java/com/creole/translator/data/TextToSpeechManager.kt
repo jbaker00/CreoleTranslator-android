@@ -27,12 +27,19 @@ import java.util.concurrent.TimeUnit
 class TextToSpeechManager(
     private val context: Context,
     private val scope: CoroutineScope,
-    private val openAiApiKey: String,
     private val voiceSettings: VoiceSettings
 ) {
 
     companion object {
         private const val TAG = "CreoleTTS"
+        private const val TTS_PROXY_URL = "https://us-central1-jbaker-api-proxy.cloudfunctions.net/api/v1/tts"
+    }
+
+    private val deviceId: String by lazy {
+        val prefs = context.getSharedPreferences("proxy_prefs", Context.MODE_PRIVATE)
+        prefs.getString("proxyDeviceId", null) ?: java.util.UUID.randomUUID().toString().also {
+            prefs.edit().putString("proxyDeviceId", it).apply()
+        }
     }
 
     private val _isSpeaking = MutableStateFlow(false)
@@ -73,43 +80,37 @@ class TextToSpeechManager(
             TTSProvider.OPENAI, TTSProvider.GROQ -> {
                 // GROQ treated as OPENAI (migration compat — Groq TTS removed)
                 val voice = if (isCreole) voiceSettings.openAIVoice.value else voiceSettings.englishOpenAIVoice.value
-                if (openAiApiKey.isNotBlank()) {
-                    speakWithOpenAI(text, voice, speed)
-                } else {
-                    speakWithAndroid(text, language, speed)
-                }
+                speakWithOpenAI(text, voice, speed, language)
             }
             TTSProvider.SYSTEM -> speakWithAndroid(text, language, speed)
         }
     }
 
-    private fun speakWithOpenAI(text: String, voice: String, speed: Double) {
+    private fun speakWithOpenAI(text: String, voice: String, speed: Double, language: String) {
         scope.launch {
             _isSpeaking.value = true
             try {
-                // Speed is sent to the OpenAI API directly, so playback rate stays at 1.0
+                // Speed is applied by the TTS API itself, so playback rate stays at 1.0
                 val audioData = synthesizeWithOpenAI(text, voice, speed)
                 playAudioData(audioData, "tts_output.mp3", 1.0)
             } catch (e: Exception) {
                 _lastError.value = "OpenAI TTS failed: ${e.message}"
-                speakWithAndroid(text, "ht", speed)
+                speakWithAndroid(text, language, speed)
             }
         }
     }
 
     private suspend fun synthesizeWithOpenAI(text: String, voice: String, speed: Double): ByteArray = withContext(Dispatchers.IO) {
-        val clampedSpeed = speed.coerceIn(0.25, 4.0)
+        val clampedSpeed = speed.coerceIn(0.25, 2.0)
         val body = JSONObject().apply {
-            put("model", "tts-1")
-            put("input", text)
+            put("text", text)
             put("voice", voice)
-            put("response_format", "mp3")
             put("speed", clampedSpeed)
         }.toString().toRequestBody("application/json".toMediaType())
 
         val request = Request.Builder()
-            .url("https://api.openai.com/v1/audio/speech")
-            .addHeader("Authorization", "Bearer $openAiApiKey")
+            .url(TTS_PROXY_URL)
+            .addHeader("x-device-id", deviceId)
             .post(body)
             .build()
 
