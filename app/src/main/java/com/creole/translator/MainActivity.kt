@@ -16,19 +16,23 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import com.google.android.gms.ads.MobileAds
+import com.google.android.play.core.review.ReviewManagerFactory
 import com.creole.translator.ui.HistoryScreen
 import com.creole.translator.ui.InterstitialAdManager
 import com.creole.translator.ui.MainScreen
 import com.creole.translator.ui.MainViewModel
+import com.creole.translator.ui.RewardedAdManager
 import com.creole.translator.ui.Screen
 import com.creole.translator.ui.SettingsScreen
 import com.creole.translator.ui.theme.CreoleTranslatorTheme
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
 
     private val viewModel: MainViewModel by viewModels()
     private val interstitialAdManager by lazy { InterstitialAdManager(this) }
+    private val rewardedAdManager by lazy { RewardedAdManager(this) }
 
     private val requestMicPermission = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -46,7 +50,23 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.interstitialEvent.collect {
-                    interstitialAdManager.showIfReady(this@MainActivity)
+                    interstitialAdManager.translationCompleted(
+                        this@MainActivity,
+                        isSpeaking = viewModel.isSpeaking.value
+                    )
+                }
+            }
+        }
+
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.reviewEvent.collect {
+                    // Brief pause so the result card settles before the dialog.
+                    delay(1000)
+                    val manager = ReviewManagerFactory.create(this@MainActivity)
+                    manager.requestReviewFlow().addOnSuccessListener { info ->
+                        manager.launchReviewFlow(this@MainActivity, info)
+                    }
                 }
             }
         }
@@ -67,10 +87,20 @@ class MainActivity : ComponentActivity() {
                     when (currentScreen) {
                         Screen.MAIN -> MainScreen(viewModel)
                         Screen.HISTORY -> HistoryScreen(viewModel)
-                        Screen.SETTINGS -> SettingsScreen(viewModel)
+                        Screen.SETTINGS -> SettingsScreen(viewModel, rewardedAdManager)
                     }
                 }
             }
         }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        interstitialAdManager.appForegrounded()
+    }
+
+    override fun onStop() {
+        super.onStop()
+        interstitialAdManager.appBackgrounded()
     }
 }

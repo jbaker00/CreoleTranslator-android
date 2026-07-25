@@ -1,7 +1,9 @@
 package com.creole.translator.ui
 
 import android.app.Application
+import android.content.Context
 import android.content.pm.PackageManager
+import com.creole.translator.BuildConfig
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -83,10 +85,33 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val ttsError = ttsManager.lastError
 
     private var currentRecordingFile: File? = null
-    private var sessionTranslationCount = 0
 
+    private val appPrefs = application.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
+
+    // Emitted after every successful translation; InterstitialAdManager decides
+    // whether an ad is actually due (interval, session cap, spacing).
     private val _interstitialEvent = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val interstitialEvent: SharedFlow<Unit> = _interstitialEvent.asSharedFlow()
+
+    private val _reviewEvent = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val reviewEvent: SharedFlow<Unit> = _reviewEvent.asSharedFlow()
+
+    private fun onTranslationSuccess() {
+        maybeRequestReview()
+        _interstitialEvent.tryEmit(Unit)
+    }
+
+    // Fires at the 3rd lifetime success, once per app version — one translation
+    // before the first interstitial (4th), so the rating dialog never lands on
+    // top of a full-screen ad.
+    private fun maybeRequestReview() {
+        val count = appPrefs.getInt("successfulTranslationCount", 0) + 1
+        appPrefs.edit().putInt("successfulTranslationCount", count).apply()
+        val version = BuildConfig.VERSION_NAME
+        if (count < 3 || appPrefs.getString("lastReviewPromptVersion", null) == version) return
+        appPrefs.edit().putString("lastReviewPromptVersion", version).apply()
+        _reviewEvent.tryEmit(Unit)
+    }
 
     // ── Input mode ──────────────────────────────────────────────────────────
 
@@ -121,10 +146,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 )
 
                 _statusMessage.value = "Translation complete"
-                sessionTranslationCount++
-                if (sessionTranslationCount % InterstitialAdManager.INTERSTITIAL_INTERVAL == 0) {
-                    _interstitialEvent.tryEmit(Unit)
-                }
+                onTranslationSuccess()
             } catch (e: GroqError.InvalidApiKey) {
                 _errorMessage.value = "Invalid Groq API key. Please check your configuration."
             } catch (e: GroqError.TranslationFailed) {
@@ -200,10 +222,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 )
 
                 _statusMessage.value = "Translation complete"
-                sessionTranslationCount++
-                if (sessionTranslationCount % InterstitialAdManager.INTERSTITIAL_INTERVAL == 0) {
-                    _interstitialEvent.tryEmit(Unit)
-                }
+                onTranslationSuccess()
             } catch (e: GroqError.InvalidApiKey) {
                 _errorMessage.value = "Invalid Groq API key. Please check your configuration."
             } catch (e: GroqError.TranscriptionFailed) {

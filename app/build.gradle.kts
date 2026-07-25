@@ -21,8 +21,8 @@ android {
         applicationId = "com.creole.translator"
         minSdk = 24
         targetSdk = 35
-        versionCode = 4
-        versionName = "1.1"
+        versionCode = 5
+        versionName = "1.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -86,6 +86,8 @@ dependencies {
     implementation(libs.okhttp)
     implementation(libs.gson)
     implementation(libs.play.services.ads)
+    implementation(libs.play.review)
+    implementation(libs.androidx.fragment.ktx)
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
