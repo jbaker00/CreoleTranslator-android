@@ -32,7 +32,7 @@ Each row describes **what** the feature does and **where** it lives in each code
 | Groq API key | none in app — transcribe/translate go through api-proxy: `/v1/transcribe` (raw m4a body + `x-language` header → `{text}`), `/v1/translate` (`{text, direction: "ht-en"\|"en-ht"}` → `{translation}`) | same proxy routes (`GroqService.swift`) |
 | OpenAI TTS | via api-proxy Cloud Function (no key in app): `https://us-central1-jbaker-api-proxy.cloudfunctions.net/api/v1/tts`, `x-device-id` header, payload `{text, voice, speed}` | same proxy URL/protocol |
 | Whisper model | `whisper-large-v3` | `whisper-large-v3` |
-| LLM model | `llama-3.3-70b-versatile` | `llama-3.3-70b-versatile` |
+| LLM model | `openai/gpt-oss-120b` | `openai/gpt-oss-120b` |
 | Groq TTS model | `canopylabs/orpheus-v1-english` | `canopylabs/orpheus-v1-english` |
 | OpenAI TTS model | `tts-1` (pinned server-side in api-proxy) | `tts-1` (pinned server-side in api-proxy) |
 
