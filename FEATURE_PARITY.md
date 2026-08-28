@@ -18,10 +18,11 @@ Each row describes **what** the feature does and **where** it lives in each code
 | Playback speed control | `VoiceSettings` `englishPlaybackSpeed`/`creolePlaybackSpeed` (MediaPlayer.PlaybackParams + OpenAI speed param) | `VoiceSettings` `englishPlaybackSpeed`/`creolePlaybackSpeed` |
 | Voice selection settings | `ui/SettingsScreen.kt` + `data/VoiceSettings.kt` | `SettingsView.swift` + `VoiceSettings.swift` |
 | Persistent voice preferences | `VoiceSettings` (SharedPreferences) | `VoiceSettings` (@AppStorage / UserDefaults) |
-| Interstitial ads — every 4 translations, max 6/session, ≥120s apart, session counters reset after 30+ min backgrounded, impression counted only on actual present (Android still every 25 — port pending) | `ui/InterstitialAdManager.kt` + `MainViewModel.interstitialEvent` | `InterstitialAdManager.swift` |
-| Rewarded ad — unlock extra voices 24h (free: `diana`, `alloy`; gate at selection; pre-ad "Unlock Extra Voices" confirm + post-ad "Voices Unlocked" dialogs, bilingual EN + Haitian Creole copy, footer shows hours left; waits ≤3s for ad load, then no-fill/present-failure grants unlock anyway; selected voice stays usable ("Your current voice — always available"); iOS unit `CreoleTranslatorRewarded` ca-app-pub-7871017136061682/5611090338, DEBUG builds use Google test unit; Android port pending) | — | `RewardedAdManager.swift` + `VoiceSettings.swift` + `SettingsView.swift` |
-| In-app review prompt — SKStoreReviewController / Play In-App Review at 3rd lifetime successful translation, once per app version, fires one translation before the first interstitial so it never overlaps an ad (Android port pending) | — | `ContentView.swift` (`maybeRequestReview`) |
+| Interstitial ads — every 4 translations, max 6/session, ≥120s apart, session counters reset after 30+ min backgrounded, impression counted only on actual present | `ui/InterstitialAdManager.kt` + `MainViewModel.interstitialEvent` | `InterstitialAdManager.swift` |
+| Rewarded ad — unlock extra voices 24h (free: `diana`, `alloy`; gate at selection; pre-ad "Unlock Extra Voices" confirm + post-ad "Voices Unlocked" dialogs, bilingual EN + Haitian Creole copy, footer shows hours left; waits ≤3s for ad load, then no-fill/present-failure grants unlock anyway; selected voice stays usable ("Your current voice — always available"); iOS unit `CreoleTranslatorRewarded` ca-app-pub-7871017136061682/5611090338, DEBUG builds use Google test unit | `ui/RewardedAdManager.kt` + `data/VoiceSettings.kt` + `ui/SettingsScreen.kt` | `RewardedAdManager.swift` + `VoiceSettings.swift` + `SettingsView.swift` |
+| In-app review prompt — SKStoreReviewController / Play In-App Review at 3rd lifetime successful translation, once per app version, fires one translation before the first interstitial so it never overlaps an ad | `ui/MainViewModel.kt` (`maybeRequestReview`) + `MainActivity.kt` (`ReviewManagerFactory`) | `ContentView.swift` (`maybeRequestReview`) |
 | Translation history (max 50) | `data/TranslationHistoryManager.kt` + `ui/HistoryScreen.kt` | `TranslationHistory.swift` + `HistoryView.swift` |
+| Phrasebook — offline 52 phrases, 6 categories (Greetings/Basics/Directions/Emergency/Medical/Travel), reversible EN↔HT direction, speaker button per phrase | `data/Phrasebook.kt` + `ui/PhrasebookScreen.kt` + `MainViewModel.showPhrasebook()` | `Phrasebook.swift` + `PhrasebookView.swift` |
 | Banner ads | `ui/BannerAd.kt` | `BannerAdView.swift` |
 | Result cards with speak buttons | `MainScreen.ResultCard` | `ContentView.ResultCard` |
 
@@ -34,6 +35,15 @@ Each row describes **what** the feature does and **where** it lives in each code
 | Whisper model | `whisper-large-v3` | `whisper-large-v3` |
 | LLM model | `openai/gpt-oss-120b` | `openai/gpt-oss-120b` |
 | Groq TTS model | `canopylabs/orpheus-v1-english` | `canopylabs/orpheus-v1-english` |
+
+## Store Listings (Play Store via fastlane)
+
+| Listing | Files |
+|---------|-------|
+| en-US (default) | `fastlane/metadata/android/en-US/{title,short_description,full_description}.txt` |
+| fr-FR (France) | `fastlane/metadata/android/fr-FR/{title,short_description,full_description}.txt` — `Traducteur Créole Haïtien`, includes phrasebook + offline note |
+| fr-CA (Canada) | `fastlane/metadata/android/fr-CA/{title,short_description,full_description}.txt` — Canada-tuned copy (Québec wording) |
+| Haiti | No Play Store `ht` locale — served by `fr-FR` (French is Haiti's other official store language); `ht` TTS already works in-app |
 | OpenAI TTS model | `tts-1` (pinned server-side in api-proxy) | `tts-1` (pinned server-side in api-proxy) |
 
 ## Voice Options (keep in sync)
@@ -56,5 +66,5 @@ Each row describes **what** the feature does and **where** it lives in each code
 
 | Item | Android only | iOS only |
 |------|-------------|----------|
-| Privacy / ATT consent | Google UMP (AdMob) | `DataPrivacyConsent.swift` + `ATTAuthorization.swift` |
+| Privacy / ATT consent | Google UMP (AdMob) `ui/ConsentManager.kt` + adaptive `BannerAd.kt` | `DataPrivacyConsent.swift` + `ATTAuthorization.swift` |
 | Firebase Analytics | — | `FirebaseAnalytics` TTS fallback logging |

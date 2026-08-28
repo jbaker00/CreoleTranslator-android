@@ -7,6 +7,7 @@ import android.media.PlaybackParams
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import android.util.Log
+import com.creole.translator.data.AnalyticsManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -95,6 +96,7 @@ class TextToSpeechManager(
                 playAudioData(audioData, "tts_output.mp3", 1.0)
             } catch (e: Exception) {
                 _lastError.value = "OpenAI TTS failed: ${e.message}"
+                AnalyticsManager.logTtsFallback("openai", language, e.message ?: "unknown")
                 speakWithAndroid(text, language, speed)
             }
         }

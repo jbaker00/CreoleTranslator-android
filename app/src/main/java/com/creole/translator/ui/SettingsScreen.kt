@@ -11,6 +11,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Warning
+import androidx.activity.compose.BackHandler
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -18,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.creole.translator.data.TTSProvider
+import com.creole.translator.data.AnalyticsManager
 import com.creole.translator.data.VoiceSettings
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -28,6 +30,7 @@ private data class PendingUnlock(val voiceId: String, val isCreole: Boolean)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(viewModel: MainViewModel, rewardedAd: RewardedAdManager) {
+    BackHandler { viewModel.showMain() }
     val englishProvider by viewModel.voiceSettings.englishProvider.collectAsState()
     val creoleProvider by viewModel.voiceSettings.creoleProvider.collectAsState()
     val openAIVoice by viewModel.voiceSettings.openAIVoice.collectAsState()
@@ -58,6 +61,7 @@ fun SettingsScreen(viewModel: MainViewModel, rewardedAd: RewardedAdManager) {
         isUnlocking = false
         viewModel.voiceSettings.unlockPremiumVoices()
         setVoice(pending)
+        AnalyticsManager.logRewardedUnlock("no_fill", pending.voiceId)
         showUnlockedConfirmation = true
     }
 
@@ -92,6 +96,7 @@ fun SettingsScreen(viewModel: MainViewModel, rewardedAd: RewardedAdManager) {
                     earned = true
                     viewModel.voiceSettings.unlockPremiumVoices()
                     setVoice(pending)
+                    AnalyticsManager.logRewardedUnlock("rewarded_ad", pending.voiceId)
                 },
                 onDismiss = {
                     isUnlocking = false
@@ -99,8 +104,7 @@ fun SettingsScreen(viewModel: MainViewModel, rewardedAd: RewardedAdManager) {
                     if (earned) showUnlockedConfirmation = true
                 },
                 onPresentFailure = {
-                    // User already agreed to watch — don't punish an SDK
-                    // presentation failure by keeping voices locked.
+                    AnalyticsManager.logRewardedUnlock("present_failed", pending.voiceId)
                     grantUnlock(pending)
                 }
             )
@@ -308,6 +312,34 @@ fun SettingsScreen(viewModel: MainViewModel, rewardedAd: RewardedAdManager) {
                         )
                     }
                 }
+            }
+
+            // ── Privacy section (mirrors iOS DataPrivacyConsent) ─────────────
+            item { HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp)) }
+            item {
+                SectionHeader(
+                    title = "Privacy",
+                    subtitle = "Manage ad personalization and data consent."
+                )
+            }
+            item {
+                val ctx = LocalContext.current
+                TextButton(
+                    onClick = {
+                        (ctx as? android.app.Activity)?.let { ConsentManager.showPrivacyOptions(it) }
+                    },
+                    modifier = Modifier.padding(horizontal = 8.dp)
+                ) {
+                    Text("Privacy Options")
+                }
+            }
+            item {
+                Text(
+                    "Your speech is sent to Groq AI for transcription/translation and to OpenAI for spoken audio. Audio is processed temporarily and never stored; translations are saved only on your device.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                )
             }
         }
     }

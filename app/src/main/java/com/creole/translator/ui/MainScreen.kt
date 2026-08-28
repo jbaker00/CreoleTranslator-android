@@ -3,6 +3,7 @@ package com.creole.translator.ui
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -45,6 +46,7 @@ fun MainScreen(viewModel: MainViewModel) {
             AppHeader(
                 historyCount = historyEntries.size,
                 onHistoryClick = { viewModel.showHistory() },
+                onPhrasebookClick = { viewModel.showPhrasebook() },
                 onSettingsClick = { viewModel.showSettings() }
             )
         },
@@ -146,59 +148,74 @@ fun MainScreen(viewModel: MainViewModel) {
 private fun AppHeader(
     historyCount: Int,
     onHistoryClick: () -> Unit,
+    onPhrasebookClick: () -> Unit,
     onSettingsClick: () -> Unit
 ) {
-    Box(
+    Row(
         modifier = Modifier
             .fillMaxWidth()
             .background(
                 Brush.horizontalGradient(listOf(BrandPurple, BrandPink))
             )
-            .padding(horizontal = 16.dp, vertical = 16.dp)
+            .statusBarsPadding()
+            .padding(horizontal = 8.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
     ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(0.dp)
+        ) {
+            IconButton(onClick = onSettingsClick, modifier = Modifier.size(40.dp)) {
+                Icon(
+                    Icons.Default.Settings,
+                    contentDescription = "Voice Settings",
+                    tint = Color.White,
+                    modifier = Modifier.size(22.dp)
+                )
+            }
+            IconButton(onClick = onPhrasebookClick, modifier = Modifier.size(40.dp)) {
+                Icon(
+                    Icons.Default.MenuBook,
+                    contentDescription = "Phrasebook",
+                    tint = Color.White,
+                    modifier = Modifier.size(22.dp)
+                )
+            }
+        }
+
         Column(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.weight(1f).padding(horizontal = 4.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
                 text = "\uD83C\uDFA4 Creole Translator",
-                fontSize = 24.sp,
+                fontSize = 18.sp,
                 fontWeight = FontWeight.Bold,
-                color = Color.White
+                color = Color.White,
+                maxLines = 1
             )
             Text(
                 text = "Haitian Creole \u2194 English",
-                fontSize = 13.sp,
-                color = Color.White.copy(alpha = 0.85f)
+                fontSize = 11.sp,
+                color = Color.White.copy(alpha = 0.85f),
+                maxLines = 1
             )
         }
 
-        // Settings button — top-left
-        IconButton(
-            onClick = onSettingsClick,
-            modifier = Modifier.align(Alignment.CenterStart)
-        ) {
-            Icon(
-                Icons.Default.Settings,
-                contentDescription = "Voice Settings",
-                tint = Color.White
-            )
-        }
-
-        // History button — top-right
         BadgedBox(
             badge = {
                 if (historyCount > 0) {
                     Badge { Text(historyCount.coerceAtMost(99).toString()) }
                 }
-            },
-            modifier = Modifier.align(Alignment.CenterEnd)
+            }
         ) {
-            IconButton(onClick = onHistoryClick) {
+            IconButton(onClick = onHistoryClick, modifier = Modifier.size(40.dp)) {
                 Icon(
                     Icons.Default.History,
                     contentDescription = "Translation History",
-                    tint = Color.White
+                    tint = Color.White,
+                    modifier = Modifier.size(22.dp)
                 )
             }
         }

@@ -12,3 +12,6 @@ local.properties
 *.jks
 *.keystore
 *.json
+
+# Kotlin build artifacts
+.kotlin/

@@ -4,6 +4,7 @@ plugins {
     alias(libs.plugins.androidApplication)
     alias(libs.plugins.kotlinAndroid)
     alias(libs.plugins.kotlinCompose)
+    alias(libs.plugins.gmsGoogleServices)
 }
 
 // Load secrets from local.properties (never committed to source control)
@@ -15,14 +16,14 @@ val localProps = Properties().also { props ->
 
 android {
     namespace = "com.creole.translator"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.creole.translator"
         minSdk = 24
-        targetSdk = 35
-        versionCode = 5
-        versionName = "1.2"
+        targetSdk = 36
+        versionCode = 8
+        versionName = "1.5"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -87,7 +88,10 @@ dependencies {
     implementation(libs.gson)
     implementation(libs.play.services.ads)
     implementation(libs.play.review)
+    implementation(libs.ump)
     implementation(libs.androidx.fragment.ktx)
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.analytics)
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

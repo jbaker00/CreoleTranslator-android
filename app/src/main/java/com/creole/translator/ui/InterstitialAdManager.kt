@@ -8,6 +8,7 @@ import com.google.android.gms.ads.AdRequest
 import com.google.android.gms.ads.FullScreenContentCallback
 import com.google.android.gms.ads.LoadAdError
 import com.google.android.gms.ads.interstitial.InterstitialAd
+import com.creole.translator.data.AnalyticsManager
 import com.google.android.gms.ads.interstitial.InterstitialAdLoadCallback
 
 // Shows an interstitial ad every INTERSTITIAL_INTERVAL successful translations,
@@ -60,7 +61,16 @@ class InterstitialAdManager(private val context: Context) {
             shownThisSession >= MAX_PER_SESSION ||
             isSpeaking ||
             !spacedOut
-        ) return
+        ) {
+            val reason = when {
+                translationsSinceLastShow < INTERSTITIAL_INTERVAL -> "interval"
+                shownThisSession >= MAX_PER_SESSION -> "max_per_session"
+                isSpeaking -> "is_speaking"
+                else -> "min_spacing"
+            }
+            AnalyticsManager.logInterstitialSkipped(reason)
+            return
+        }
         showIfReady(activity)
     }
 
@@ -78,6 +88,7 @@ class InterstitialAdManager(private val context: Context) {
                         override fun onAdShowedFullScreenContent() {
                             shownThisSession++
                             translationsSinceLastShow = 0
+                            AnalyticsManager.logInterstitialShown(translationsSinceLastShow, shownThisSession)
                             lastShownAtMs = SystemClock.elapsedRealtime()
                         }
                         override fun onAdDismissedFullScreenContent() {

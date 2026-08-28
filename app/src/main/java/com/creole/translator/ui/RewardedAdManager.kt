@@ -9,6 +9,7 @@ import com.google.android.gms.ads.FullScreenContentCallback
 import com.google.android.gms.ads.LoadAdError
 import com.google.android.gms.ads.rewarded.RewardedAd
 import com.google.android.gms.ads.rewarded.RewardedAdLoadCallback
+import com.creole.translator.data.AnalyticsManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -50,6 +51,7 @@ class RewardedAdManager(private val context: Context) {
                     isLoading = false
                     rewardedAd = null
                     _isReady.value = false
+                    AnalyticsManager.logRewardedUnlock("load_failed", error.code.toString())
                 }
             }
         )
