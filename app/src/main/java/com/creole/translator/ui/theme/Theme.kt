@@ -10,7 +10,6 @@ import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
@@ -47,7 +46,11 @@ fun CreoleTranslatorTheme(
     if (!view.isInEditMode) {
         SideEffect {
             val window = (view.context as Activity).window
-            window.statusBarColor = colorScheme.primary.toArgb()
+            // No statusBarColor: it is deprecated and a no-op from Android 15
+            // on, so setting it only made the two platforms disagree. The bar
+            // is transparent under edge-to-edge and the top bar's own gradient
+            // shows through it — MainScreen's header already applies
+            // statusBarsPadding, so nothing is occluded.
             WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !darkTheme
         }
     }
