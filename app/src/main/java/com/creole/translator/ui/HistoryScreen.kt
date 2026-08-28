@@ -3,11 +3,13 @@ package com.creole.translator.ui
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.activity.compose.BackHandler
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -27,6 +29,7 @@ import java.util.Locale
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HistoryScreen(viewModel: MainViewModel) {
+    BackHandler { viewModel.showMain() }
     val entries by viewModel.historyEntries.collectAsState()
     var showClearDialog by remember { mutableStateOf(false) }
 
@@ -56,7 +59,8 @@ fun HistoryScreen(viewModel: MainViewModel) {
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(Brush.horizontalGradient(listOf(BrandPurple, BrandPink)))
-                    .padding(horizontal = 4.dp, vertical = 4.dp)
+                    .statusBarsPadding()
+                    .padding(horizontal = 4.dp, vertical = 8.dp)
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),

@@ -1,5 +1,6 @@
 package com.creole.translator.ui
 
+import android.app.Activity
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -7,20 +8,29 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Warning
+import androidx.activity.compose.BackHandler
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.creole.translator.data.TTSProvider
+import com.creole.translator.data.AnalyticsManager
 import com.creole.translator.data.VoiceSettings
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
+
+private data class PendingUnlock(val voiceId: String, val isCreole: Boolean)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(viewModel: MainViewModel) {
+fun SettingsScreen(viewModel: MainViewModel, rewardedAd: RewardedAdManager) {
+    BackHandler { viewModel.showMain() }
     val englishProvider by viewModel.voiceSettings.englishProvider.collectAsState()
     val creoleProvider by viewModel.voiceSettings.creoleProvider.collectAsState()
     val openAIVoice by viewModel.voiceSettings.openAIVoice.collectAsState()
@@ -29,6 +39,113 @@ fun SettingsScreen(viewModel: MainViewModel) {
     val creoleSpeed by viewModel.voiceSettings.creolePlaybackSpeed.collectAsState()
     val isSpeaking by viewModel.isSpeaking.collectAsState()
     val ttsError by viewModel.ttsError.collectAsState()
+    val premiumUnlockedUntil by viewModel.voiceSettings.premiumUnlockedUntil.collectAsState()
+
+    val activity = LocalContext.current as? Activity
+    val scope = rememberCoroutineScope()
+    var pendingUnlock by remember { mutableStateOf<PendingUnlock?>(null) }
+    var showUnlockPrompt by remember { mutableStateOf(false) }
+    var showUnlockedConfirmation by remember { mutableStateOf(false) }
+    var isUnlocking by remember { mutableStateOf(false) }
+
+    val premiumUnlocked = System.currentTimeMillis() < premiumUnlockedUntil
+
+    LaunchedEffect(Unit) { rewardedAd.preload() }
+
+    fun setVoice(pending: PendingUnlock) {
+        if (pending.isCreole) viewModel.voiceSettings.setOpenAIVoice(pending.voiceId)
+        else viewModel.voiceSettings.setEnglishOpenAIVoice(pending.voiceId)
+    }
+
+    fun grantUnlock(pending: PendingUnlock) {
+        isUnlocking = false
+        viewModel.voiceSettings.unlockPremiumVoices()
+        setVoice(pending)
+        AnalyticsManager.logRewardedUnlock("no_fill", pending.voiceId)
+        showUnlockedConfirmation = true
+    }
+
+    fun selectVoice(voiceId: String, isCreole: Boolean, locked: Boolean) {
+        val pending = PendingUnlock(voiceId, isCreole)
+        if (!locked) {
+            setVoice(pending)
+            return
+        }
+        if (isUnlocking) return
+        pendingUnlock = pending
+        showUnlockPrompt = true
+    }
+
+    fun startUnlock() {
+        val pending = pendingUnlock ?: return
+        if (isUnlocking) return
+        pendingUnlock = null
+        isUnlocking = true
+        scope.launch {
+            // The manager preloads when the screen opens; give a slow network
+            // up to 3s before falling back to a free grant.
+            var waitedMs = 0L
+            while (!rewardedAd.isReady.value && waitedMs < 3000) {
+                delay(250)
+                waitedMs += 250
+            }
+            var earned = false
+            val shown = activity != null && rewardedAd.show(
+                activity,
+                onReward = {
+                    earned = true
+                    viewModel.voiceSettings.unlockPremiumVoices()
+                    setVoice(pending)
+                    AnalyticsManager.logRewardedUnlock("rewarded_ad", pending.voiceId)
+                },
+                onDismiss = {
+                    isUnlocking = false
+                    // Confirmation must wait until the ad is off screen.
+                    if (earned) showUnlockedConfirmation = true
+                },
+                onPresentFailure = {
+                    AnalyticsManager.logRewardedUnlock("present_failed", pending.voiceId)
+                    grantUnlock(pending)
+                }
+            )
+            // Still no ad after waiting — don't block the user on a missing ad.
+            if (!shown) grantUnlock(pending)
+        }
+    }
+
+    if (showUnlockPrompt) {
+        AlertDialog(
+            onDismissRequest = {
+                showUnlockPrompt = false
+                pendingUnlock = null
+            },
+            title = { Text("Unlock Extra Voices") },
+            text = { Text("Watch one short ad. All voices free for 24 hours.\n\nGade yon ti piblisite. Tout vwa yo gratis pou 24 èdtan.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showUnlockPrompt = false
+                    startUnlock()
+                }) { Text("Watch Ad") }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    showUnlockPrompt = false
+                    pendingUnlock = null
+                }) { Text("Not Now") }
+            }
+        )
+    }
+
+    if (showUnlockedConfirmation) {
+        AlertDialog(
+            onDismissRequest = { showUnlockedConfirmation = false },
+            title = { Text("Voices Unlocked") },
+            text = { Text("All voices are free for the next 24 hours.\n\nTout vwa yo gratis pou pwochen 24 èdtan yo.") },
+            confirmButton = {
+                TextButton(onClick = { showUnlockedConfirmation = false }) { Text("OK") }
+            }
+        )
+    }
 
     Scaffold(
         topBar = {
@@ -64,12 +181,17 @@ fun SettingsScreen(viewModel: MainViewModel) {
             if (englishProvider != TTSProvider.SYSTEM) {
                 item { VoiceListHeader("Choose English Voice") }
                 items(VoiceSettings.openAIVoices) { voice ->
+                    val inAdTier = voice.id !in VoiceSettings.freeVoiceIds && !premiumUnlocked
+                    val locked = inAdTier && voice.id != englishOpenAIVoice
                     VoiceRow(
                         voice = voice,
                         isSelected = englishOpenAIVoice == voice.id,
-                        onClick = { viewModel.voiceSettings.setEnglishOpenAIVoice(voice.id) }
+                        locked = locked,
+                        inAdTier = inAdTier,
+                        onClick = { selectVoice(voice.id, isCreole = false, locked = locked) }
                     )
                 }
+                item { UnlockFooter(premiumUnlocked, premiumUnlockedUntil) }
             }
             item {
                 SpeedSlider(
@@ -98,12 +220,17 @@ fun SettingsScreen(viewModel: MainViewModel) {
             if (creoleProvider != TTSProvider.SYSTEM) {
                 item { VoiceListHeader("Choose Haitian Creole Voice") }
                 items(VoiceSettings.openAIVoices) { voice ->
+                    val inAdTier = voice.id !in VoiceSettings.freeVoiceIds && !premiumUnlocked
+                    val locked = inAdTier && voice.id != openAIVoice
                     VoiceRow(
                         voice = voice,
                         isSelected = openAIVoice == voice.id,
-                        onClick = { viewModel.voiceSettings.setOpenAIVoice(voice.id) }
+                        locked = locked,
+                        inAdTier = inAdTier,
+                        onClick = { selectVoice(voice.id, isCreole = true, locked = locked) }
                     )
                 }
+                item { UnlockFooter(premiumUnlocked, premiumUnlockedUntil) }
             }
             item {
                 SpeedSlider(
@@ -186,6 +313,34 @@ fun SettingsScreen(viewModel: MainViewModel) {
                     }
                 }
             }
+
+            // ── Privacy section (mirrors iOS DataPrivacyConsent) ─────────────
+            item { HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp)) }
+            item {
+                SectionHeader(
+                    title = "Privacy",
+                    subtitle = "Manage ad personalization and data consent."
+                )
+            }
+            item {
+                val ctx = LocalContext.current
+                TextButton(
+                    onClick = {
+                        (ctx as? android.app.Activity)?.let { ConsentManager.showPrivacyOptions(it) }
+                    },
+                    modifier = Modifier.padding(horizontal = 8.dp)
+                ) {
+                    Text("Privacy Options")
+                }
+            }
+            item {
+                Text(
+                    "Your speech is sent to Groq AI for transcription/translation and to OpenAI for spoken audio. Audio is processed temporarily and never stored; translations are saved only on your device.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                )
+            }
         }
     }
 }
@@ -261,6 +416,8 @@ private fun ProviderRow(
 private fun VoiceRow(
     voice: VoiceSettings.Voice,
     isSelected: Boolean,
+    locked: Boolean,
+    inAdTier: Boolean,
     onClick: () -> Unit
 ) {
     Row(
@@ -271,11 +428,27 @@ private fun VoiceRow(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(modifier = Modifier.weight(1f)) {
-            Text(voice.name, style = MaterialTheme.typography.bodyLarge)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(voice.name, style = MaterialTheme.typography.bodyLarge)
+                if (locked) {
+                    Spacer(Modifier.width(6.dp))
+                    Icon(
+                        Icons.Default.Lock,
+                        contentDescription = "Locked",
+                        tint = MaterialTheme.colorScheme.tertiary,
+                        modifier = Modifier.size(14.dp)
+                    )
+                }
+            }
             Text(
-                voice.description,
+                when {
+                    locked -> "Free with a short ad"
+                    inAdTier -> "Your current voice — always available"
+                    else -> voice.description
+                },
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = if (locked) MaterialTheme.colorScheme.tertiary
+                        else MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
         if (isSelected) {
@@ -286,6 +459,24 @@ private fun VoiceRow(
             )
         }
     }
+}
+
+@Composable
+private fun UnlockFooter(premiumUnlocked: Boolean, premiumUnlockedUntil: Long) {
+    val text = if (premiumUnlocked) {
+        val hoursLeft = ((premiumUnlockedUntil - System.currentTimeMillis()) / 3600_000.0)
+            .let { kotlin.math.ceil(it).toInt() }
+        val remaining = if (hoursLeft <= 1) "less than 1 hour" else "$hoursLeft hours"
+        "All voices unlocked ✓ $remaining left"
+    } else {
+        "Extra voices are free for 24 hours after one short ad."
+    }
+    Text(
+        text,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+    )
 }
 
 @Composable

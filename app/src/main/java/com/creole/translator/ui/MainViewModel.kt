@@ -1,7 +1,9 @@
 package com.creole.translator.ui
 
 import android.app.Application
+import android.content.Context
 import android.content.pm.PackageManager
+import com.creole.translator.BuildConfig
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -9,6 +11,7 @@ import com.creole.translator.data.AudioRecorder
 import com.creole.translator.data.GroqService
 import com.creole.translator.data.TextToSpeechManager
 import com.creole.translator.data.TranslationHistoryManager
+import com.creole.translator.data.AnalyticsManager
 import com.creole.translator.data.VoiceSettings
 import com.creole.translator.model.GroqError
 import com.creole.translator.model.TranslationDirection
@@ -22,7 +25,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.io.File
 
-enum class Screen { MAIN, HISTORY, SETTINGS }
+enum class Screen { MAIN, HISTORY, SETTINGS, PHRASEBOOK }
 
 enum class InputMode { VOICE, TEXT }
 
@@ -83,10 +86,42 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val ttsError = ttsManager.lastError
 
     private var currentRecordingFile: File? = null
-    private var sessionTranslationCount = 0
 
+    private val appPrefs = application.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
+
+    // Emitted after every successful translation; InterstitialAdManager decides
+    // whether an ad is actually due (interval, session cap, spacing).
     private val _interstitialEvent = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val interstitialEvent: SharedFlow<Unit> = _interstitialEvent.asSharedFlow()
+
+    private val _reviewEvent = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val reviewEvent: SharedFlow<Unit> = _reviewEvent.asSharedFlow()
+
+    private fun onTranslationSuccess(direction: TranslationDirection? = null, charLength: Int = 0, isVoice: Boolean = true) {
+        // Analytics: core metric for Android vs iOS comparison
+        if (direction != null) {
+            val dirCode = when (direction) {
+                TranslationDirection.CREOLE_TO_ENGLISH -> "ht-en"
+                TranslationDirection.ENGLISH_TO_CREOLE -> "en-ht"
+            }
+            AnalyticsManager.logTranslation(dirCode, charLength, isVoice, true)
+        }
+        maybeRequestReview()
+        _interstitialEvent.tryEmit(Unit)
+    }
+
+    // Fires at the 3rd lifetime success, once per app version — one translation
+    // before the first interstitial (4th), so the rating dialog never lands on
+    // top of a full-screen ad.
+    private fun maybeRequestReview() {
+        val count = appPrefs.getInt("successfulTranslationCount", 0) + 1
+        appPrefs.edit().putInt("successfulTranslationCount", count).apply()
+        val version = BuildConfig.VERSION_NAME
+        if (count < 3 || appPrefs.getString("lastReviewPromptVersion", null) == version) return
+        appPrefs.edit().putString("lastReviewPromptVersion", version).apply()
+        AnalyticsManager.logReviewRequested(version)
+        _reviewEvent.tryEmit(Unit)
+    }
 
     // ── Input mode ──────────────────────────────────────────────────────────
 
@@ -121,11 +156,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 )
 
                 _statusMessage.value = "Translation complete"
-                sessionTranslationCount++
-                if (sessionTranslationCount % InterstitialAdManager.INTERSTITIAL_INTERVAL == 0) {
-                    _interstitialEvent.tryEmit(Unit)
-                }
+                onTranslationSuccess(result.direction, result.translation.length, false)
             } catch (e: GroqError.InvalidApiKey) {
+                AnalyticsManager.logTranslationFailed(_direction.value.let { if (it == TranslationDirection.CREOLE_TO_ENGLISH) "ht-en" else "en-ht" }, false, "InvalidApiKey")
                 _errorMessage.value = "Invalid Groq API key. Please check your configuration."
             } catch (e: GroqError.TranslationFailed) {
                 _errorMessage.value = "Translation failed: ${e.message}"
@@ -200,11 +233,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 )
 
                 _statusMessage.value = "Translation complete"
-                sessionTranslationCount++
-                if (sessionTranslationCount % InterstitialAdManager.INTERSTITIAL_INTERVAL == 0) {
-                    _interstitialEvent.tryEmit(Unit)
-                }
+                onTranslationSuccess(result.direction, result.translation.length, true)
             } catch (e: GroqError.InvalidApiKey) {
+                AnalyticsManager.logTranslationFailed(_direction.value.let { if (it == TranslationDirection.CREOLE_TO_ENGLISH) "ht-en" else "en-ht" }, true, "InvalidApiKey")
                 _errorMessage.value = "Invalid Groq API key. Please check your configuration."
             } catch (e: GroqError.TranscriptionFailed) {
                 _errorMessage.value = "Transcription failed: ${e.message}"
@@ -257,9 +288,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     // ── Navigation ───────────────────────────────────────────────────────────
 
-    fun showHistory() { _currentScreen.value = Screen.HISTORY }
-    fun showSettings() { _currentScreen.value = Screen.SETTINGS }
-    fun showMain() { _currentScreen.value = Screen.MAIN }
+    fun showHistory() { _currentScreen.value = Screen.HISTORY; AnalyticsManager.logScreenView("history") }
+    fun showSettings() { _currentScreen.value = Screen.SETTINGS; AnalyticsManager.logScreenView("settings") }
+    fun showPhrasebook() { _currentScreen.value = Screen.PHRASEBOOK; AnalyticsManager.logScreenView("phrasebook") }
+    fun showMain() { _currentScreen.value = Screen.MAIN; AnalyticsManager.logScreenView("main") }
 
     // ── History ──────────────────────────────────────────────────────────────
 
