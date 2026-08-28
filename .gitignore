@@ -12,6 +12,10 @@ local.properties
 *.jks
 *.keystore
 *.json
+# ...but the Firebase config must be tracked: it is client config, not a
+# secret, and the build needs it. A blanket *.json is how a fabricated
+# placeholder shipped in 1.5 unnoticed — nothing could diff it against real.
+!app/google-services.json
 
 # Kotlin build artifacts
 .kotlin/

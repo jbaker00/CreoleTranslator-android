@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "926155038057",
+    "firebase_url": "https://globalvibes-1a6aa.firebaseio.com",
+    "project_id": "globalvibes-1a6aa",
+    "storage_bucket": "globalvibes-1a6aa.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:926155038057:android:ddad81707d4cd78324b1f8",
+        "android_client_info": {
+          "package_name": "com.creole.translator"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "926155038057-ogbocdvon2vb9lo9dplokcj054s5mhkh.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCFB7KRammWRlJ0R9ZXxsr6eA7vZtXEp3o"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "926155038057-ogbocdvon2vb9lo9dplokcj054s5mhkh.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "926155038057-4v9maibv1av17niko58nh82ldac6o0c2.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.jbaker.AAC"
+              }
+            }
+          ]
+        }
+      },
+      "admob_app_id": "ca-app-pub-7871017136061682~7166858043"
+    }
+  ],
+  "configuration_version": "1"
+}
