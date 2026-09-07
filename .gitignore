@@ -19,3 +19,4 @@ local.properties
 
 # Kotlin build artifacts
 .kotlin/
+fastlane/report.xml
