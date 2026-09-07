@@ -1,0 +1,1 @@
+Fixed a display issue on newer Android versions.
