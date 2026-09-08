@@ -57,4 +57,22 @@ platform :android do
     )
   end
 
+  desc "Build and upload release AAB straight to production, fully rolled out"
+  lane :release_production do
+    gradle(
+      task: "bundle",
+      build_type: "Release",
+      project_dir: "./"
+    )
+    upload_to_play_store(
+      track: "production",
+      aab: "app/build/outputs/bundle/release/app-release.aab",
+      release_status: "completed",
+      rollout: "1.0",
+      skip_upload_apk: true,
+      skip_upload_images: true,
+      skip_upload_screenshots: true,
+    )
+  end
+
 end

@@ -62,7 +62,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         AnalyticsManager.init(this)
-        AppAvailabilityManager.init()
+        AppAvailabilityManager.init(this)
 
         // Predictive back is enabled via AndroidManifest android:enableOnBackInvokedCallback
         // Handle system back to navigate between our Screen enum instead of exiting

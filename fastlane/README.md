@@ -47,6 +47,14 @@ Push store listing metadata (descriptions, changelogs)
 
 Build and upload release AAB to internal testing
 
+### android release_production
+
+```sh
+[bundle exec] fastlane android release_production
+```
+
+Build and upload release AAB straight to production, fully rolled out
+
 ----
 
 This README.md is auto-generated and will be re-generated every time [_fastlane_](https://fastlane.tools) is run.
