@@ -7,6 +7,7 @@ import com.creole.translator.BuildConfig
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.creole.translator.data.AppAvailabilityManager
 import com.creole.translator.data.AudioRecorder
 import com.creole.translator.data.GroqService
 import com.creole.translator.data.TextToSpeechManager
@@ -84,6 +85,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     // TTS state forwarded
     val isSpeaking = ttsManager.isSpeaking
     val ttsError = ttsManager.lastError
+
+    // Remote kill switch (Android-only; iOS never reads this flag)
+    val isAppDisabled = AppAvailabilityManager.isDisabled
+    val disabledMessage = AppAvailabilityManager.disabledMessage
 
     private var currentRecordingFile: File? = null
 

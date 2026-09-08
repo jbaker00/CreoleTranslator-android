@@ -68,3 +68,4 @@ Each row describes **what** the feature does and **where** it lives in each code
 |------|-------------|----------|
 | Privacy / ATT consent | Google UMP (AdMob) `ui/ConsentManager.kt` + adaptive `BannerAd.kt` | `DataPrivacyConsent.swift` + `ATTAuthorization.swift` |
 | Firebase Analytics | — | `FirebaseAnalytics` TTS fallback logging |
+| Remote kill switch | `data/AppAvailabilityManager.kt` + `ui/AppDisabledScreen.kt` — Firebase Remote Config keys `android_app_disabled` (bool) / `android_disabled_message` (string), fetched in `MainActivity.onCreate`. Deliberately **not** ported to iOS: flipping these keys in the Firebase console pulls the Android app's functionality without touching iOS, since the iOS client never reads them (even though both apps share the `globalvibes-1a6aa` Firebase project). Does not affect the `api-proxy` Cloud Function that both platforms call for transcription/translation/TTS. | — |

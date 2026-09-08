@@ -44,6 +44,7 @@ ump = { group = "com.google.android.ump", name = "user-messaging-platform", vers
 androidx-fragment-ktx = { group = "androidx.fragment", name = "fragment-ktx", version.ref = "fragment" }
 firebase-bom = { group = "com.google.firebase", name = "firebase-bom", version.ref = "firebaseBom" }
 firebase-analytics = { group = "com.google.firebase", name = "firebase-analytics", version.ref = "firebaseAnalytics" }
+firebase-config = { group = "com.google.firebase", name = "firebase-config" }
 
 [plugins]
 androidApplication = { id = "com.android.application", version.ref = "agp" }

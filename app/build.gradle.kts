@@ -92,6 +92,7 @@ dependencies {
     implementation(libs.androidx.fragment.ktx)
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.analytics)
+    implementation(libs.firebase.config)
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
