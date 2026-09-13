@@ -130,4 +130,15 @@ class VoiceSettings(context: Context) {
         _creolePlaybackSpeed.value = speed
         prefs.edit().putFloat("creolePlaybackSpeed", speed.toFloat()).apply()
     }
+
+    // Auto-detect the input language and flip direction when it clearly
+    // disagrees with the selected one. Default ON; the user can undo a flip
+    // per translation or turn it off here.
+    private val _autoDetectLanguage = MutableStateFlow(prefs.getBoolean("autoDetectLanguage", true))
+    val autoDetectLanguage: StateFlow<Boolean> = _autoDetectLanguage.asStateFlow()
+
+    fun setAutoDetectLanguage(enabled: Boolean) {
+        _autoDetectLanguage.value = enabled
+        prefs.edit().putBoolean("autoDetectLanguage", enabled).apply()
+    }
 }

@@ -59,6 +59,20 @@ class GroqService(context: Context) {
         translateText(transcription, direction, TranslationSource.VOICE)
     }
 
+    /** Transcribe only, forcing Whisper to [language] ("ht"|"en"). */
+    suspend fun transcribe(audioFile: File, language: String): String = withContext(Dispatchers.IO) {
+        transcribeAudio(audioFile, language)
+    }
+
+    /** Translate already-known text in an explicit direction (auto-detect / undo paths). */
+    suspend fun translate(
+        text: String,
+        direction: TranslationDirection,
+        source: TranslationSource
+    ): TranslationResult = withContext(Dispatchers.IO) {
+        translateText(text, direction, source)
+    }
+
     /** Rate a captured translation. Best-effort: never throws, never blocks the UI path. */
     suspend fun sendFeedback(sampleId: String, rating: FeedbackRating, comment: String? = null): Boolean =
         withContext(Dispatchers.IO) {

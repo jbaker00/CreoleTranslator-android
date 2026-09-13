@@ -38,6 +38,7 @@ fun SettingsScreen(viewModel: MainViewModel, rewardedAd: RewardedAdManager) {
     val englishSpeed by viewModel.voiceSettings.englishPlaybackSpeed.collectAsState()
     val creoleSpeed by viewModel.voiceSettings.creolePlaybackSpeed.collectAsState()
     val isSpeaking by viewModel.isSpeaking.collectAsState()
+    val autoDetect by viewModel.voiceSettings.autoDetectLanguage.collectAsState()
     val ttsError by viewModel.ttsError.collectAsState()
     val premiumUnlockedUntil by viewModel.voiceSettings.premiumUnlockedUntil.collectAsState()
 
@@ -311,6 +312,37 @@ fun SettingsScreen(viewModel: MainViewModel, rewardedAd: RewardedAdManager) {
                             color = MaterialTheme.colorScheme.error
                         )
                     }
+                }
+            }
+
+            // ── Translation section ──────────────────────────────────────────
+            item { HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp)) }
+            item {
+                SectionHeader(
+                    title = "Translation",
+                    subtitle = "How the app decides which way to translate."
+                )
+            }
+            item {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Auto-detect language", style = MaterialTheme.typography.bodyLarge)
+                        Text(
+                            "If you type or say English while set to Creole → English (or the reverse), " +
+                                "translate the right way anyway. You can undo any flip.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(
+                        checked = autoDetect,
+                        onCheckedChange = { viewModel.voiceSettings.setAutoDetectLanguage(it) }
+                    )
                 }
             }
 

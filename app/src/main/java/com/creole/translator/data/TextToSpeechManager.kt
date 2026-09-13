@@ -92,7 +92,7 @@ class TextToSpeechManager(
             _isSpeaking.value = true
             try {
                 // Speed is applied by the TTS API itself, so playback rate stays at 1.0
-                val audioData = synthesizeWithOpenAI(text, voice, speed)
+                val audioData = synthesizeWithOpenAI(text, voice, speed, language)
                 playAudioData(audioData, "tts_output.mp3", 1.0)
             } catch (e: Exception) {
                 _lastError.value = "OpenAI TTS failed: ${e.message}"
@@ -102,12 +102,14 @@ class TextToSpeechManager(
         }
     }
 
-    private suspend fun synthesizeWithOpenAI(text: String, voice: String, speed: Double): ByteArray = withContext(Dispatchers.IO) {
+    private suspend fun synthesizeWithOpenAI(text: String, voice: String, speed: Double, language: String): ByteArray = withContext(Dispatchers.IO) {
         val clampedSpeed = speed.coerceIn(0.25, 2.0)
         val body = JSONObject().apply {
             put("text", text)
             put("voice", voice)
             put("speed", clampedSpeed)
+            // "ht"|"en" — lets the proxy apply Creole pronunciation respellings before synthesis.
+            put("language", language)
         }.toString().toRequestBody("application/json".toMediaType())
 
         val request = Request.Builder()

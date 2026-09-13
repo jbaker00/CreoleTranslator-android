@@ -62,6 +62,11 @@ object AnalyticsManager {
         b.keySet().joinToString(", ") { k -> "$k=${b.getString(k) ?: b.get(k).toString()}" }
 
     // --- Translation events ---
+    /** Auto-detect flipped the direction the user had selected (from/to are source-language codes). */
+    fun logAutoDetectFlip(from: String, to: String) {
+        logEvent("auto_detect_flip", Bundle().apply { putString("from", from); putString("to", to) })
+    }
+
     // Called on every successful translation — this is your core "how many translations" metric
     fun logTranslation(direction: String, charLength: Int, isVoice: Boolean, success: Boolean) {
         val p = Bundle().apply {

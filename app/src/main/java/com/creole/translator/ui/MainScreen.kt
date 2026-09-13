@@ -43,6 +43,7 @@ fun MainScreen(viewModel: MainViewModel) {
     val typedInput by viewModel.typedInput.collectAsState()
     val currentSampleId by viewModel.currentSampleId.collectAsState()
     val feedbackGiven by viewModel.feedbackGiven.collectAsState()
+    val autoDetectOverrode by viewModel.autoDetectOverrode.collectAsState()
     var showCommentDialog by remember { mutableStateOf(false) }
 
     Scaffold(
@@ -68,6 +69,15 @@ fun MainScreen(viewModel: MainViewModel) {
         ) {
             // Direction indicator
             DirectionIndicator(direction)
+
+            // Auto-detect flipped the direction for this translation — say so, offer Undo.
+            autoDetectOverrode?.let { manual ->
+                AutoDetectChip(
+                    detected = direction,
+                    onUndo = { viewModel.undoAutoDetect() },
+                    enabled = !isProcessing
+                )
+            }
 
             // Voice / Text input mode picker
             InputModePicker(
@@ -321,6 +331,31 @@ private fun TextInputSection(
             Icon(Icons.Default.Translate, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(8.dp))
             Text("Translate", fontWeight = FontWeight.SemiBold)
+        }
+    }
+}
+
+@Composable
+private fun AutoDetectChip(detected: TranslationDirection, onUndo: () -> Unit, enabled: Boolean) {
+    Surface(
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.secondaryContainer,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier.padding(start = 14.dp, end = 4.dp, top = 2.dp, bottom = 2.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(Icons.Default.AutoAwesome, contentDescription = null, modifier = Modifier.size(16.dp),
+                tint = MaterialTheme.colorScheme.onSecondaryContainer)
+            Spacer(Modifier.width(8.dp))
+            Text(
+                "Auto-detected ${detected.sourceLabel} → ${detected.targetLabel}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                modifier = Modifier.weight(1f)
+            )
+            TextButton(onClick = onUndo, enabled = enabled) { Text("Undo") }
         }
     }
 }
