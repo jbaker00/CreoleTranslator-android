@@ -367,7 +367,7 @@ fun SettingsScreen(viewModel: MainViewModel, rewardedAd: RewardedAdManager) {
             }
             item {
                 Text(
-                    "Your speech is sent to Groq AI for transcription/translation and to OpenAI for spoken audio. Audio is processed temporarily and never stored; translations are saved only on your device.",
+                    "Your speech is sent to Groq AI for transcription/translation and to OpenAI for spoken audio. Translated text (never linked to you) is kept for up to 90 days so Creole speakers can review quality; voice recordings are kept only when a translation is flagged, for up to 30 days. See our Privacy Policy for details and how to request deletion.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
