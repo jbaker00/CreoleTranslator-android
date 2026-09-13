@@ -21,4 +21,4 @@ WHY HAITIAN CREOLE TRANSLATOR
 Most translation apps treat Haitian Creole as an afterthought. This app was built specifically for Kreol speakers and the people who work with them. Voice input means you don't have to know how to spell in Creole — just speak naturally.
 
 PRIVACY
-Audio is sent securely to AI services for transcription and translation, then discarded. Nothing is stored on our servers. Full details in our privacy policy.
+Audio is sent securely to AI services for transcription and translation, then discarded — audio is never stored. Translated text is kept for 90 days, without any identifier, so human reviewers can check translation quality. Full details in our privacy policy.
