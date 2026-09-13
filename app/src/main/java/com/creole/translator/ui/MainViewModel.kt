@@ -16,6 +16,7 @@ import com.creole.translator.data.TranslationHistoryManager
 import com.creole.translator.data.AnalyticsManager
 import com.creole.translator.data.VoiceSettings
 import com.creole.translator.model.FeedbackRating
+import com.creole.translator.model.FeedbackTarget
 import com.creole.translator.model.GroqError
 import com.creole.translator.model.TranslationDirection
 import com.creole.translator.model.TranslationEntry
@@ -82,6 +83,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _feedbackGiven = MutableStateFlow<FeedbackRating?>(null)
     val feedbackGiven: StateFlow<FeedbackRating?> = _feedbackGiven.asStateFlow()
+
+    // STT accuracy rating for the current transcription (voice results only;
+    // typed text has no transcription step, so the UI hides these thumbs).
+    private val _sttFeedbackGiven = MutableStateFlow<FeedbackRating?>(null)
+    val sttFeedbackGiven: StateFlow<FeedbackRating?> = _sttFeedbackGiven.asStateFlow()
+
+    // True when the current result came from the voice path (processAudio).
+    private val _isVoiceResult = MutableStateFlow(false)
+    val isVoiceResult: StateFlow<Boolean> = _isVoiceResult.asStateFlow()
 
     // Auto-detect: when the detector overrides the user's selected direction,
     // this holds the direction they had selected, so the UI can show the
@@ -186,6 +196,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             _translation.value = ""
             _currentSampleId.value = null
             _feedbackGiven.value = null
+            _sttFeedbackGiven.value = null
             try {
                 val dir = effectiveDirection(text, _direction.value, allowAuto)
                 val result = groqService.translate(text, dir, source)
@@ -230,6 +241,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _transcription.value = ""
         lastInputText = text
         lastInputSource = TranslationSource.TYPED
+        _isVoiceResult.value = false
         translateInput(text, TranslationSource.TYPED, allowAuto = true)
     }
 
@@ -283,6 +295,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             _translation.value = ""
             _currentSampleId.value = null
             _feedbackGiven.value = null
+            _sttFeedbackGiven.value = null
 
             try {
                 // Whisper is forced to the selected source language, so detection
@@ -293,6 +306,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 _transcription.value = transcription
                 lastInputText = transcription
                 lastInputSource = TranslationSource.VOICE
+                _isVoiceResult.value = true
                 val dir = effectiveDirection(transcription, selected, allowAuto = true)
                 val result = groqService.translate(transcription, dir, TranslationSource.VOICE)
                 _translation.value = result.translation
@@ -330,6 +344,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (_feedbackGiven.value != null) return
         _feedbackGiven.value = rating
         viewModelScope.launch { groqService.sendFeedback(sampleId, rating, comment) }
+    }
+
+    /** 👍/👎 on the current transcription (STT accuracy, voice results only). */
+    fun rateTranscription(rating: FeedbackRating, comment: String? = null) {
+        val sampleId = _currentSampleId.value ?: return
+        if (_sttFeedbackGiven.value != null) return
+        _sttFeedbackGiven.value = rating
+        viewModelScope.launch { groqService.sendFeedback(sampleId, rating, comment, FeedbackTarget.STT) }
     }
 
     // ── Direction ───────────────────────────────────────────────────────────

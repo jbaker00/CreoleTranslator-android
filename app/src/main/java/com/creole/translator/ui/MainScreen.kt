@@ -43,8 +43,11 @@ fun MainScreen(viewModel: MainViewModel) {
     val typedInput by viewModel.typedInput.collectAsState()
     val currentSampleId by viewModel.currentSampleId.collectAsState()
     val feedbackGiven by viewModel.feedbackGiven.collectAsState()
+    val sttFeedbackGiven by viewModel.sttFeedbackGiven.collectAsState()
+    val isVoiceResult by viewModel.isVoiceResult.collectAsState()
     val autoDetectOverrode by viewModel.autoDetectOverrode.collectAsState()
     var showCommentDialog by remember { mutableStateOf(false) }
+    var showSttCommentDialog by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -125,14 +128,19 @@ fun MainScreen(viewModel: MainViewModel) {
                 ProcessingCard()
             }
 
-            // Source result card
+            // Source result card (STT thumbs only for voice results)
             if (transcription.isNotBlank() || isProcessing) {
                 ResultCard(
                     label = direction.sourceLabel,
                     flag = direction.sourceFlag,
                     text = if (isProcessing && transcription.isBlank()) null else transcription,
                     onSpeak = { viewModel.speakText(transcription, direction.sourceLanguage) },
-                    isSpeaking = isSpeaking
+                    isSpeaking = isSpeaking,
+                    feedback = if (isVoiceResult && currentSampleId != null && !isProcessing) FeedbackState(
+                        given = sttFeedbackGiven,
+                        onUp = { viewModel.rateTranscription(FeedbackRating.UP) },
+                        onDown = { showSttCommentDialog = true }
+                    ) else null
                 )
             }
 
@@ -165,6 +173,16 @@ fun MainScreen(viewModel: MainViewModel) {
                         viewModel.rateTranslation(FeedbackRating.DOWN, comment)
                     },
                     onDismiss = { showCommentDialog = false }
+                )
+            }
+
+            if (showSttCommentDialog) {
+                FeedbackCommentDialog(
+                    onSend = { comment ->
+                        showSttCommentDialog = false
+                        viewModel.rateTranscription(FeedbackRating.DOWN, comment)
+                    },
+                    onDismiss = { showSttCommentDialog = false }
                 )
             }
 

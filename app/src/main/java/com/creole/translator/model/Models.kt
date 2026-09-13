@@ -63,6 +63,8 @@ enum class TranslationSource(val wire: String) { VOICE("voice"), TYPED("typed") 
 
 enum class FeedbackRating(val wire: String) { UP("up"), DOWN("down") }
 
+enum class FeedbackTarget(val wire: String) { TRANSLATION("translation"), STT("stt") }
+
 data class TranslationEntry(
     val id: String = UUID.randomUUID().toString(),
     val timestamp: Long = System.currentTimeMillis(),

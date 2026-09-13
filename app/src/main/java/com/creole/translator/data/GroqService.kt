@@ -3,6 +3,7 @@ package com.creole.translator.data
 import android.content.Context
 import android.util.Log
 import com.creole.translator.model.FeedbackRating
+import com.creole.translator.model.FeedbackTarget
 import com.creole.translator.model.GroqError
 import com.creole.translator.model.TranslationDirection
 import com.creole.translator.model.TranslationResult
@@ -74,13 +75,19 @@ class GroqService(context: Context) {
     }
 
     /** Rate a captured translation. Best-effort: never throws, never blocks the UI path. */
-    suspend fun sendFeedback(sampleId: String, rating: FeedbackRating, comment: String? = null): Boolean =
+    suspend fun sendFeedback(
+        sampleId: String,
+        rating: FeedbackRating,
+        comment: String? = null,
+        target: FeedbackTarget = FeedbackTarget.TRANSLATION
+    ): Boolean =
         withContext(Dispatchers.IO) {
             try {
                 val json = JSONObject().apply {
                     put("sampleId", sampleId)
                     put("rating", rating.wire)
                     comment?.takeIf { it.isNotBlank() }?.let { put("comment", it.take(200)) }
+                    put("target", target.wire)
                 }
                 val request = proxyRequest("/v1/feedback")
                     .addHeader("Content-Type", "application/json")

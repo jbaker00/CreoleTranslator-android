@@ -1,1 +1,2 @@
 Rate any translation with a thumbs up or down to help us improve accuracy.
+Voice users can also rate the transcription — thumbs down keeps the clip so we can fix speech-to-text mistakes.
