@@ -22,6 +22,8 @@ import com.google.android.ump.ConsentRequestParameters
 import com.google.android.ump.UserMessagingPlatform
 import com.google.android.play.core.review.ReviewManagerFactory
 import com.creole.translator.data.AnalyticsManager
+import com.creole.translator.data.AppAvailabilityManager
+import com.creole.translator.ui.AppDisabledScreen
 import com.creole.translator.ui.ConsentManager
 import com.creole.translator.ui.HistoryScreen
 import com.creole.translator.ui.PhrasebookScreen
@@ -60,6 +62,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         AnalyticsManager.init(this)
+        AppAvailabilityManager.init(this)
 
         // Predictive back is enabled via AndroidManifest android:enableOnBackInvokedCallback
         // Handle system back to navigate between our Screen enum instead of exiting
@@ -112,12 +115,18 @@ class MainActivity : ComponentActivity() {
                     color = MaterialTheme.colorScheme.background
                 ) {
                     val currentScreen by viewModel.currentScreen.collectAsState()
+                    val isAppDisabled by viewModel.isAppDisabled.collectAsState()
 
-                    when (currentScreen) {
-                        Screen.MAIN -> MainScreen(viewModel)
-                        Screen.HISTORY -> HistoryScreen(viewModel)
-                        Screen.PHRASEBOOK -> PhrasebookScreen(viewModel)
-                        Screen.SETTINGS -> SettingsScreen(viewModel, rewardedAdManager)
+                    if (isAppDisabled) {
+                        val disabledMessage by viewModel.disabledMessage.collectAsState()
+                        AppDisabledScreen(disabledMessage)
+                    } else {
+                        when (currentScreen) {
+                            Screen.MAIN -> MainScreen(viewModel)
+                            Screen.HISTORY -> HistoryScreen(viewModel)
+                            Screen.PHRASEBOOK -> PhrasebookScreen(viewModel)
+                            Screen.SETTINGS -> SettingsScreen(viewModel, rewardedAdManager)
+                        }
                     }
                 }
             }

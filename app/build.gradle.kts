@@ -22,8 +22,8 @@ android {
         applicationId = "com.creole.translator"
         minSdk = 24
         targetSdk = 36
-        versionCode = 9
-        versionName = "1.6"
+        versionCode = 12
+        versionName = "1.8"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -92,6 +92,7 @@ dependencies {
     implementation(libs.androidx.fragment.ktx)
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.analytics)
+    implementation(libs.firebase.config)
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

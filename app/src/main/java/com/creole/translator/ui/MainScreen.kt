@@ -20,6 +20,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.creole.translator.model.FeedbackRating
 import com.creole.translator.model.TranslationDirection
 import com.creole.translator.ui.theme.BrandPink
 import com.creole.translator.ui.theme.BrandPurple
@@ -40,6 +41,13 @@ fun MainScreen(viewModel: MainViewModel) {
     val historyEntries by viewModel.historyEntries.collectAsState()
     val inputMode by viewModel.inputMode.collectAsState()
     val typedInput by viewModel.typedInput.collectAsState()
+    val currentSampleId by viewModel.currentSampleId.collectAsState()
+    val feedbackGiven by viewModel.feedbackGiven.collectAsState()
+    val sttFeedbackGiven by viewModel.sttFeedbackGiven.collectAsState()
+    val isVoiceResult by viewModel.isVoiceResult.collectAsState()
+    val autoDetectOverrode by viewModel.autoDetectOverrode.collectAsState()
+    var showCommentDialog by remember { mutableStateOf(false) }
+    var showSttCommentDialog by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -64,6 +72,15 @@ fun MainScreen(viewModel: MainViewModel) {
         ) {
             // Direction indicator
             DirectionIndicator(direction)
+
+            // Auto-detect flipped the direction for this translation — say so, offer Undo.
+            autoDetectOverrode?.let { manual ->
+                AutoDetectChip(
+                    detected = direction,
+                    onUndo = { viewModel.undoAutoDetect() },
+                    enabled = !isProcessing
+                )
+            }
 
             // Voice / Text input mode picker
             InputModePicker(
@@ -111,14 +128,19 @@ fun MainScreen(viewModel: MainViewModel) {
                 ProcessingCard()
             }
 
-            // Source result card
+            // Source result card (STT thumbs only for voice results)
             if (transcription.isNotBlank() || isProcessing) {
                 ResultCard(
                     label = direction.sourceLabel,
                     flag = direction.sourceFlag,
                     text = if (isProcessing && transcription.isBlank()) null else transcription,
                     onSpeak = { viewModel.speakText(transcription, direction.sourceLanguage) },
-                    isSpeaking = isSpeaking
+                    isSpeaking = isSpeaking,
+                    feedback = if (isVoiceResult && currentSampleId != null && !isProcessing) FeedbackState(
+                        given = sttFeedbackGiven,
+                        onUp = { viewModel.rateTranscription(FeedbackRating.UP) },
+                        onDown = { showSttCommentDialog = true }
+                    ) else null
                 )
             }
 
@@ -135,7 +157,32 @@ fun MainScreen(viewModel: MainViewModel) {
                     flag = direction.targetFlag,
                     text = if (isProcessing && translation.isBlank()) null else translation,
                     onSpeak = { viewModel.speakText(translation, direction.targetLanguage) },
-                    isSpeaking = isSpeaking
+                    isSpeaking = isSpeaking,
+                    feedback = if (currentSampleId != null && !isProcessing) FeedbackState(
+                        given = feedbackGiven,
+                        onUp = { viewModel.rateTranslation(FeedbackRating.UP) },
+                        onDown = { showCommentDialog = true }
+                    ) else null
+                )
+            }
+
+            if (showCommentDialog) {
+                FeedbackCommentDialog(
+                    onSend = { comment ->
+                        showCommentDialog = false
+                        viewModel.rateTranslation(FeedbackRating.DOWN, comment)
+                    },
+                    onDismiss = { showCommentDialog = false }
+                )
+            }
+
+            if (showSttCommentDialog) {
+                FeedbackCommentDialog(
+                    onSend = { comment ->
+                        showSttCommentDialog = false
+                        viewModel.rateTranscription(FeedbackRating.DOWN, comment)
+                    },
+                    onDismiss = { showSttCommentDialog = false }
                 )
             }
 
@@ -307,6 +354,31 @@ private fun TextInputSection(
 }
 
 @Composable
+private fun AutoDetectChip(detected: TranslationDirection, onUndo: () -> Unit, enabled: Boolean) {
+    Surface(
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.secondaryContainer,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier.padding(start = 14.dp, end = 4.dp, top = 2.dp, bottom = 2.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(Icons.Default.AutoAwesome, contentDescription = null, modifier = Modifier.size(16.dp),
+                tint = MaterialTheme.colorScheme.onSecondaryContainer)
+            Spacer(Modifier.width(8.dp))
+            Text(
+                "Auto-detected ${detected.sourceLabel} → ${detected.targetLabel}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                modifier = Modifier.weight(1f)
+            )
+            TextButton(onClick = onUndo, enabled = enabled) { Text("Undo") }
+        }
+    }
+}
+
+@Composable
 private fun DirectionIndicator(direction: TranslationDirection) {
     Surface(
         shape = RoundedCornerShape(20.dp),
@@ -404,13 +476,50 @@ private fun SwitchDirectionButton(onClick: () -> Unit, enabled: Boolean) {
     }
 }
 
+/** Thumbs state for a result card; null hides the thumbs entirely. */
+private data class FeedbackState(
+    val given: FeedbackRating?,
+    val onUp: () -> Unit,
+    val onDown: () -> Unit
+)
+
+@Composable
+private fun FeedbackCommentDialog(onSend: (String?) -> Unit, onDismiss: () -> Unit) {
+    var comment by remember { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Sa a pa bon? / Not right?") },
+        text = {
+            Column {
+                Text(
+                    "Di nou sa ki mal (opsyonèl). / Tell us what was wrong (optional).",
+                    fontSize = 13.sp
+                )
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = comment,
+                    onValueChange = { if (it.length <= 200) comment = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    minLines = 2,
+                    maxLines = 4
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onSend(comment.trim().ifBlank { null }) }) { Text("Send") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+    )
+}
+
 @Composable
 private fun ResultCard(
     label: String,
     flag: String,
     text: String?,
     onSpeak: () -> Unit,
-    isSpeaking: Boolean
+    isSpeaking: Boolean,
+    feedback: FeedbackState? = null
 ) {
     Surface(
         shape = RoundedCornerShape(16.dp),
@@ -454,6 +563,40 @@ private fun ResultCard(
                     lineHeight = 24.sp,
                     modifier = Modifier.fillMaxWidth()
                 )
+                if (feedback != null && text.isNotBlank()) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
+                        horizontalArrangement = Arrangement.End,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        val given = feedback.given
+                        Text(
+                            text = when (given) {
+                                FeedbackRating.UP -> "Mèsi! / Thanks!"
+                                FeedbackRating.DOWN -> "Mèsi, n ap gade l. / Thanks, we'll review it."
+                                null -> "Bon? / Good?"
+                            },
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        )
+                        IconButton(onClick = feedback.onUp, enabled = given == null) {
+                            Icon(
+                                Icons.Default.ThumbUp,
+                                contentDescription = "Good translation",
+                                tint = if (given == FeedbackRating.UP) BrandPurple
+                                       else MaterialTheme.colorScheme.onSurface.copy(alpha = if (given == null) 0.6f else 0.25f)
+                            )
+                        }
+                        IconButton(onClick = feedback.onDown, enabled = given == null) {
+                            Icon(
+                                Icons.Default.ThumbDown,
+                                contentDescription = "Bad translation",
+                                tint = if (given == FeedbackRating.DOWN) BrandPink
+                                       else MaterialTheme.colorScheme.onSurface.copy(alpha = if (given == null) 0.6f else 0.25f)
+                            )
+                        }
+                    }
+                }
             }
         }
     }

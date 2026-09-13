@@ -4,10 +4,11 @@ Translate between Haitian Creole (Kreyòl) and English instantly — by voice or
 ⌨️ TYPE — Prefer typing? Enter any text and get an instant Creole or English translation.
 🔄 TWO DIRECTIONS — Switch between Creole→English and English→Creole with a single tap.
 🔊 LISTEN — Hear translations read aloud with natural-sounding text-to-speech.
+👍 YOUR FEEDBACK MATTERS — Rate any translation or transcription with a thumbs up or down. Flagged items are checked by human reviewers, so accuracy keeps getting better with every update.
 📋 HISTORY — Every translation is saved locally so you can review and replay anytime.
 
 HOW IT WORKS
-Haitian Creole Translator uses Whisper (OpenAI's speech recognition model) for accurate voice transcription and Llama 3 for natural-language translation. The result sounds like a human translated it — not a dictionary lookup.
+Haitian Creole Translator uses Whisper (OpenAI's speech recognition model) for accurate voice transcription and state-of-the-art AI models for natural-language translation. The result sounds like a human translated it — not a dictionary lookup.
 
 PERFECT FOR
 • Haitian families bridging language barriers with English-speaking relatives
@@ -21,4 +22,4 @@ WHY HAITIAN CREOLE TRANSLATOR
 Most translation apps treat Haitian Creole as an afterthought. This app was built specifically for Kreol speakers and the people who work with them. Voice input means you don't have to know how to spell in Creole — just speak naturally.
 
 PRIVACY
-Audio is sent securely to AI services for transcription and translation, then discarded — audio is never stored. Translated text is kept for 90 days, without any identifier, so human reviewers can check translation quality. Full details in our privacy policy.
+Audio is sent securely to AI services for transcription and translation, then discarded — except voice clips you flag with a thumbs down (or low-confidence ones), which are kept for 30 days so reviewers can fix mistakes. Translated text is kept for 90 days, without any identifier, so human reviewers can check translation quality. Full details in our privacy policy.
