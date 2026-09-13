@@ -69,11 +69,15 @@ submit personal info.)
   ephemeral **No**, optional **No**, purpose **Analytics**. Keep as currently
   declared.
 
-**Audio → "Voice or sound recordings": leave UNTICKED.** Audio is sent to Groq
-transiently and never stored by us. Play's guidance: data that is only transmitted
-and processed in-memory to fulfil a request does not count as "collected". If the
-proxy later starts retaining audio for low-confidence inputs, this must be ticked
-(Collected, not ephemeral, purpose App functionality + Analytics).
+**Audio → "Voice or sound recordings": TICK IT.** As of 2026-09-12 the proxy keeps
+every recording for up to 7 days and, when the translation is flagged (confidence
+≤ 3 or 👎), for up to 30 days for reviewer listening.
+- *Is this data collected, shared, or both?* → **Collected** (Groq/OpenAI are
+  processors; tick Shared too only if you want the conservative reading).
+- *Is this data processed ephemerally?* → **No**.
+- *Is this data required or optional?* → **Optional** (users can type instead of
+  recording).
+- *Why?* → **App functionality**, **Analytics**.
 
 **Device or other IDs**
 - ☑ **Device or other IDs** — already true (AdMob advertising ID; plus the
@@ -109,7 +113,9 @@ tracking + not linked), Usage Data, Diagnostics. **Add one data type:**
     identifier of any kind.
   - *Do you use this data for tracking purposes?* → **No**.
 
-Leave **Audio Data** unticked (same reasoning as Play: transient processing only).
+Add **Audio Data** (as of 2026-09-12 recordings are retained: 7 days, or 30 when
+flagged for review). Purposes: **App Functionality**, **Analytics**. *Linked to the
+user's identity?* → **No**. *Used for tracking?* → **No**.
 Leave Identifiers / Usage Data / Diagnostics as they are.
 
 Also tick, in the *Data Collection Practices* preamble, that data is collected
@@ -131,9 +137,9 @@ to match when you do.
    it on your behalf (service providers), which Play excludes from "sharing". If
    you prefer the conservative reading, tick **Shared** too and name the purpose
    as App functionality.
-2. **Audio left undeclared** on both stores because it is never retained. The
-   moment the proxy keeps audio for low-confidence voice inputs, both forms must
-   add it.
+2. **Audio is now declared** on both stores (retention live since 2026-09-12).
+   The policies say 7 days / 30 days when flagged; the bucket lifecycle rules
+   enforce exactly that.
 3. **Deletion mechanism = email.** Play accepts a URL to instructions; if a
    reviewer bounces it, add a `#delete` section to the Android policy page.
 4. **`privacy@creoletranslator.app`** is the contact address in the Android
