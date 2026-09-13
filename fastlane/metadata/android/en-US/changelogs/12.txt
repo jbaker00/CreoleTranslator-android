@@ -1,0 +1,2 @@
+Better translations, powered by you: rate any translation or voice transcription with a thumbs up or down — your feedback goes to human reviewers and directly improves accuracy.
+New in this version: automatic language detection with one-tap undo, a built-in phrasebook, and Creole pronunciation fixes.
