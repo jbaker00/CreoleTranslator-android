@@ -25,6 +25,7 @@ Each row describes **what** the feature does and **where** it lives in each code
 | Phrasebook — offline 52 phrases, 6 categories (Greetings/Basics/Directions/Emergency/Medical/Travel), reversible EN↔HT direction, speaker button per phrase | `data/Phrasebook.kt` + `ui/PhrasebookScreen.kt` + `MainViewModel.showPhrasebook()` | `Phrasebook.swift` + `PhrasebookView.swift` |
 | Banner ads | `ui/BannerAd.kt` | `BannerAdView.swift` |
 | Result cards with speak buttons | `MainScreen.ResultCard` | `ContentView.ResultCard` |
+| Translation feedback — 👍/👎 on the translated-text card, shown only when the proxy returned a `sampleId`; 👎 opens an optional ≤200-char comment dialog; one tap then locked; POST `/v1/feedback` `{sampleId, rating:"up"\|"down", comment?}`, silent on failure. `/v1/translate` now sends `source: "voice"\|"typed"` and reads back `sampleId` + `confidence` (both optional) | `MainScreen.ResultCard` (`FeedbackState`, `FeedbackCommentDialog`) + `MainViewModel.rateTranslation()` + `GroqService.sendFeedback()` / `TranslationSource` | `ContentView.ResultCard` + `GroqService.sendFeedback()` |
 
 ## Key Constants (keep in sync)
 

@@ -14,6 +14,7 @@ import com.creole.translator.data.TextToSpeechManager
 import com.creole.translator.data.TranslationHistoryManager
 import com.creole.translator.data.AnalyticsManager
 import com.creole.translator.data.VoiceSettings
+import com.creole.translator.model.FeedbackRating
 import com.creole.translator.model.GroqError
 import com.creole.translator.model.TranslationDirection
 import com.creole.translator.model.TranslationEntry
@@ -71,6 +72,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _translation = MutableStateFlow("")
     val translation: StateFlow<String> = _translation.asStateFlow()
+
+    // QA feedback for the current translation. sampleId is null when the proxy
+    // didn't capture it (override hit, older proxy) — then no thumbs are shown.
+    private val _currentSampleId = MutableStateFlow<String?>(null)
+    val currentSampleId: StateFlow<String?> = _currentSampleId.asStateFlow()
+
+    private val _feedbackGiven = MutableStateFlow<FeedbackRating?>(null)
+    val feedbackGiven: StateFlow<FeedbackRating?> = _feedbackGiven.asStateFlow()
 
     // Status / error messages
     private val _statusMessage = MutableStateFlow<String?>(null)
@@ -148,11 +157,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             _errorMessage.value = null
             _transcription.value = ""
             _translation.value = ""
+            _currentSampleId.value = null
+            _feedbackGiven.value = null
 
             try {
                 val result = groqService.processText(text, _direction.value)
                 _transcription.value = result.transcription
                 _translation.value = result.translation
+                _currentSampleId.value = result.sampleId
 
                 historyManager.addEntry(
                     sourceText = result.transcription,
@@ -225,11 +237,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             _errorMessage.value = null
             _transcription.value = ""
             _translation.value = ""
+            _currentSampleId.value = null
+            _feedbackGiven.value = null
 
             try {
                 val result = groqService.processAudio(audioFile, _direction.value)
                 _transcription.value = result.transcription
                 _translation.value = result.translation
+                _currentSampleId.value = result.sampleId
 
                 historyManager.addEntry(
                     sourceText = result.transcription,
@@ -255,6 +270,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 audioRecorder.deleteRecording(audioFile)
             }
         }
+    }
+
+    /** 👍/👎 on the current translation. Fire-and-forget; the UI locks after one tap. */
+    fun rateTranslation(rating: FeedbackRating, comment: String? = null) {
+        val sampleId = _currentSampleId.value ?: return
+        if (_feedbackGiven.value != null) return
+        _feedbackGiven.value = rating
+        viewModelScope.launch { groqService.sendFeedback(sampleId, rating, comment) }
     }
 
     // ── Direction ───────────────────────────────────────────────────────────

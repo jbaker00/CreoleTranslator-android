@@ -52,8 +52,16 @@ enum class TranslationDirection {
 data class TranslationResult(
     val transcription: String,
     val translation: String,
-    val direction: TranslationDirection
+    val direction: TranslationDirection,
+    /** Set when the proxy captured this translation for QA; null for overrides and older proxies. */
+    val sampleId: String? = null,
+    /** Model's self-reported 1–5 confidence, null if it didn't report one. */
+    val confidence: Int? = null
 )
+
+enum class TranslationSource(val wire: String) { VOICE("voice"), TYPED("typed") }
+
+enum class FeedbackRating(val wire: String) { UP("up"), DOWN("down") }
 
 data class TranslationEntry(
     val id: String = UUID.randomUUID().toString(),

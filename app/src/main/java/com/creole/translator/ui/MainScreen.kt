@@ -20,6 +20,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.creole.translator.model.FeedbackRating
 import com.creole.translator.model.TranslationDirection
 import com.creole.translator.ui.theme.BrandPink
 import com.creole.translator.ui.theme.BrandPurple
@@ -40,6 +41,9 @@ fun MainScreen(viewModel: MainViewModel) {
     val historyEntries by viewModel.historyEntries.collectAsState()
     val inputMode by viewModel.inputMode.collectAsState()
     val typedInput by viewModel.typedInput.collectAsState()
+    val currentSampleId by viewModel.currentSampleId.collectAsState()
+    val feedbackGiven by viewModel.feedbackGiven.collectAsState()
+    var showCommentDialog by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -135,7 +139,22 @@ fun MainScreen(viewModel: MainViewModel) {
                     flag = direction.targetFlag,
                     text = if (isProcessing && translation.isBlank()) null else translation,
                     onSpeak = { viewModel.speakText(translation, direction.targetLanguage) },
-                    isSpeaking = isSpeaking
+                    isSpeaking = isSpeaking,
+                    feedback = if (currentSampleId != null && !isProcessing) FeedbackState(
+                        given = feedbackGiven,
+                        onUp = { viewModel.rateTranslation(FeedbackRating.UP) },
+                        onDown = { showCommentDialog = true }
+                    ) else null
+                )
+            }
+
+            if (showCommentDialog) {
+                FeedbackCommentDialog(
+                    onSend = { comment ->
+                        showCommentDialog = false
+                        viewModel.rateTranslation(FeedbackRating.DOWN, comment)
+                    },
+                    onDismiss = { showCommentDialog = false }
                 )
             }
 
@@ -404,13 +423,50 @@ private fun SwitchDirectionButton(onClick: () -> Unit, enabled: Boolean) {
     }
 }
 
+/** Thumbs state for a result card; null hides the thumbs entirely. */
+private data class FeedbackState(
+    val given: FeedbackRating?,
+    val onUp: () -> Unit,
+    val onDown: () -> Unit
+)
+
+@Composable
+private fun FeedbackCommentDialog(onSend: (String?) -> Unit, onDismiss: () -> Unit) {
+    var comment by remember { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Sa a pa bon? / Not right?") },
+        text = {
+            Column {
+                Text(
+                    "Di nou sa ki mal (opsyonèl). / Tell us what was wrong (optional).",
+                    fontSize = 13.sp
+                )
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = comment,
+                    onValueChange = { if (it.length <= 200) comment = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    minLines = 2,
+                    maxLines = 4
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onSend(comment.trim().ifBlank { null }) }) { Text("Send") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+    )
+}
+
 @Composable
 private fun ResultCard(
     label: String,
     flag: String,
     text: String?,
     onSpeak: () -> Unit,
-    isSpeaking: Boolean
+    isSpeaking: Boolean,
+    feedback: FeedbackState? = null
 ) {
     Surface(
         shape = RoundedCornerShape(16.dp),
@@ -454,6 +510,40 @@ private fun ResultCard(
                     lineHeight = 24.sp,
                     modifier = Modifier.fillMaxWidth()
                 )
+                if (feedback != null && text.isNotBlank()) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
+                        horizontalArrangement = Arrangement.End,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        val given = feedback.given
+                        Text(
+                            text = when (given) {
+                                FeedbackRating.UP -> "Mèsi! / Thanks!"
+                                FeedbackRating.DOWN -> "Mèsi, n ap gade l. / Thanks, we'll review it."
+                                null -> "Bon? / Good?"
+                            },
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        )
+                        IconButton(onClick = feedback.onUp, enabled = given == null) {
+                            Icon(
+                                Icons.Default.ThumbUp,
+                                contentDescription = "Good translation",
+                                tint = if (given == FeedbackRating.UP) BrandPurple
+                                       else MaterialTheme.colorScheme.onSurface.copy(alpha = if (given == null) 0.6f else 0.25f)
+                            )
+                        }
+                        IconButton(onClick = feedback.onDown, enabled = given == null) {
+                            Icon(
+                                Icons.Default.ThumbDown,
+                                contentDescription = "Bad translation",
+                                tint = if (given == FeedbackRating.DOWN) BrandPink
+                                       else MaterialTheme.colorScheme.onSurface.copy(alpha = if (given == null) 0.6f else 0.25f)
+                            )
+                        }
+                    }
+                }
             }
         }
     }

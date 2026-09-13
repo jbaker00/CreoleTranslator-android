@@ -1,9 +1,12 @@
 package com.creole.translator.data
 
 import android.content.Context
+import android.util.Log
+import com.creole.translator.model.FeedbackRating
 import com.creole.translator.model.GroqError
 import com.creole.translator.model.TranslationDirection
 import com.creole.translator.model.TranslationResult
+import com.creole.translator.model.TranslationSource
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
@@ -45,13 +48,7 @@ class GroqService(context: Context) {
         text: String,
         direction: TranslationDirection
     ): TranslationResult = withContext(Dispatchers.IO) {
-        val translation = translateText(text, direction)
-
-        TranslationResult(
-            transcription = text,
-            translation = translation,
-            direction = direction
-        )
+        translateText(text, direction, TranslationSource.TYPED)
     }
 
     suspend fun processAudio(
@@ -59,14 +56,28 @@ class GroqService(context: Context) {
         direction: TranslationDirection
     ): TranslationResult = withContext(Dispatchers.IO) {
         val transcription = transcribeAudio(audioFile, direction.sourceLanguage)
-        val translation = translateText(transcription, direction)
-
-        TranslationResult(
-            transcription = transcription,
-            translation = translation,
-            direction = direction
-        )
+        translateText(transcription, direction, TranslationSource.VOICE)
     }
+
+    /** Rate a captured translation. Best-effort: never throws, never blocks the UI path. */
+    suspend fun sendFeedback(sampleId: String, rating: FeedbackRating, comment: String? = null): Boolean =
+        withContext(Dispatchers.IO) {
+            try {
+                val json = JSONObject().apply {
+                    put("sampleId", sampleId)
+                    put("rating", rating.wire)
+                    comment?.takeIf { it.isNotBlank() }?.let { put("comment", it.take(200)) }
+                }
+                val request = proxyRequest("/v1/feedback")
+                    .addHeader("Content-Type", "application/json")
+                    .post(json.toString().toRequestBody("application/json".toMediaType()))
+                    .build()
+                client.newCall(request).execute().use { it.isSuccessful }
+            } catch (e: Exception) {
+                Log.w("GroqService", "feedback failed: ${e.message}")
+                false
+            }
+        }
 
     private fun transcribeAudio(audioFile: File, language: String): String {
         val request = proxyRequest("/v1/transcribe")
@@ -89,7 +100,11 @@ class GroqService(context: Context) {
         }
     }
 
-    private fun translateText(text: String, direction: TranslationDirection): String {
+    private fun translateText(
+        text: String,
+        direction: TranslationDirection,
+        source: TranslationSource
+    ): TranslationResult {
         val proxyDirection = when (direction) {
             TranslationDirection.CREOLE_TO_ENGLISH -> "ht-en"
             TranslationDirection.ENGLISH_TO_CREOLE -> "en-ht"
@@ -98,6 +113,7 @@ class GroqService(context: Context) {
         val requestJson = JSONObject().apply {
             put("text", text)
             put("direction", proxyDirection)
+            put("source", source.wire)
         }
 
         val request = proxyRequest("/v1/translate")
@@ -114,7 +130,14 @@ class GroqService(context: Context) {
         }
 
         return try {
-            JSONObject(body).getString("translation").trim()
+            val obj = JSONObject(body)
+            TranslationResult(
+                transcription = text,
+                translation = obj.getString("translation").trim(),
+                direction = direction,
+                sampleId = obj.optString("sampleId").takeIf { it.isNotBlank() },
+                confidence = if (obj.isNull("confidence")) null else obj.optInt("confidence").takeIf { it in 1..5 }
+            )
         } catch (e: Exception) {
             throw GroqError.TranslationFailed("Failed to parse response: ${e.message}")
         }
