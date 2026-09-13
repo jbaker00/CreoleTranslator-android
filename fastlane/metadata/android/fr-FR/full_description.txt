@@ -22,4 +22,4 @@ POURQUOI TRADUCTEUR CRÉOLE HAÏTIEN
 La plupart des apps traitent le créole comme une langue secondaire. Celle-ci a été conçue pour les locuteurs du Kreyòl et ceux qui travaillent avec eux. La saisie vocale évite d'avoir à épeler en créole — parlez naturellement.
 
 CONFIDENTIALITÉ
-L'audio est envoyé de façon sécurisée aux services IA pour transcription et traduction, puis supprimé. Rien n'est conservé sur nos serveurs. Détails dans notre politique de confidentialité.
+L'audio est envoyé de façon sécurisée aux services IA pour transcription et traduction, puis supprimé — l'audio n'est jamais conservé. Le texte traduit est conservé 90 jours, sans aucun identifiant, pour que des relecteurs humains vérifient la qualité des traductions. Détails dans notre politique de confidentialité.
