@@ -7,7 +7,7 @@ Each row describes **what** the feature does and **where** it lives in each code
 
 | Feature | Android | iOS |
 |---------|---------|-----|
-| Voice recording → Whisper transcription | `data/AudioRecorder.kt` + `data/GroqService.kt` | `AudioRecorder.swift` + `GroqService.swift` |
+| Voice recording → transcription (OpenAI gpt-transcribe for Creole via `x-stt-engine`, Groq Whisper for English/backup; blank transcript → `NothingHeard` status) | `data/AudioRecorder.kt` + `data/GroqService.kt` | `AudioRecorder.swift` + `GroqService.swift` |
 | Text input mode (type to translate) | `ui/MainScreen.kt` `TextInputSection` + `MainViewModel.submitTypedText()` | `ContentView.swift` `InputMode.text` + `processTextInput()` |
 | Direction switcher (Creole↔English) | `MainViewModel.switchDirection()` | `ContentView.translationDirection` |
 | Translation via Groq (openai/gpt-oss-120b) | `data/GroqService.translateText()` | `GroqService.translateText()` |
@@ -36,7 +36,7 @@ Each row describes **what** the feature does and **where** it lives in each code
 |----------|------------------------|-----------------|
 | Groq API key | none in app — transcribe/translate go through api-proxy: `/v1/transcribe` (raw m4a body + `x-language` header → `{text}`), `/v1/translate` (`{text, direction: "ht-en"\|"en-ht"}` → `{translation}`) | same proxy routes (`GroqService.swift`) |
 | OpenAI TTS | via api-proxy Cloud Function (no key in app): `https://us-central1-jbaker-api-proxy.cloudfunctions.net/api/v1/tts`, `x-device-id` header, payload `{text, voice, speed}` | same proxy URL/protocol |
-| Whisper model | `whisper-large-v3` | `whisper-large-v3` |
+| STT engine | Creole: `gpt-transcribe` (`GroqService.CREOLE_STT_ENGINE`), English: `whisper-large-v3` | same (`creoleSttEngine`) |
 | LLM model | `openai/gpt-oss-120b` | `openai/gpt-oss-120b` |
 | Groq TTS model | `canopylabs/orpheus-v1-english` | `canopylabs/orpheus-v1-english` |
 
