@@ -87,6 +87,11 @@ object AnalyticsManager {
         logEvent("translation_failed", p)
     }
 
+    /** TEST BUILD (branch stt-gpt-transcribe): engine heard nothing transcribable — not a failure. */
+    fun logSttNothingHeard() {
+        logEvent("stt_nothing_heard", Bundle())
+    }
+
     // --- Ad events ---
     fun logInterstitialShown(translationCount: Int, shownThisSession: Int) {
         val p = Bundle().apply {

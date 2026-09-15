@@ -25,6 +25,14 @@ class GroqService(context: Context) {
 
     companion object {
         private const val PROXY_BASE = "https://us-central1-jbaker-api-proxy.cloudfunctions.net/api"
+
+        /** TEST BUILD (branch stt-gpt-transcribe): ask the proxy to transcribe
+         * Creole with OpenAI gpt-transcribe instead of Groq Whisper. Unlike
+         * Whisper, it returns an empty transcript when it can't make out the
+         * speech, so processAudio() turns that into GroqError.NothingHeard
+         * rather than sending empty text to /translate. Remove the header (or
+         * set null) to get production behaviour. */
+        private val STT_ENGINE_OVERRIDE: String? = "gpt-transcribe"
     }
 
     private val deviceId: String by lazy {
@@ -57,6 +65,8 @@ class GroqService(context: Context) {
         direction: TranslationDirection
     ): TranslationResult = withContext(Dispatchers.IO) {
         val transcription = transcribeAudio(audioFile, direction.sourceLanguage)
+        // gpt-transcribe declines rather than guesses; the proxy rejects empty text.
+        if (transcription.isBlank()) throw GroqError.NothingHeard
         translateText(transcription, direction, TranslationSource.VOICE)
     }
 
@@ -101,8 +111,10 @@ class GroqService(context: Context) {
         }
 
     private fun transcribeAudio(audioFile: File, language: String): String {
-        val request = proxyRequest("/v1/transcribe")
+        val builder = proxyRequest("/v1/transcribe")
             .addHeader("x-language", language)
+        STT_ENGINE_OVERRIDE?.let { builder.addHeader("x-stt-engine", it) }
+        val request = builder
             .post(audioFile.asRequestBody("application/octet-stream".toMediaType()))
             .build()
 

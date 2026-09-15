@@ -303,6 +303,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 // common case of speaking English with Creole→English selected.
                 val selected = _direction.value
                 val transcription = groqService.transcribe(audioFile, selected.sourceLanguage)
+                // gpt-transcribe declines rather than guesses: blank means "heard nothing usable".
+                if (transcription.isBlank()) throw GroqError.NothingHeard
                 _transcription.value = transcription
                 lastInputText = transcription
                 lastInputSource = TranslationSource.VOICE
@@ -323,6 +325,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             } catch (e: GroqError.InvalidApiKey) {
                 AnalyticsManager.logTranslationFailed(_direction.value.let { if (it == TranslationDirection.CREOLE_TO_ENGLISH) "ht-en" else "en-ht" }, true, "InvalidApiKey")
                 _errorMessage.value = "Invalid Groq API key. Please check your configuration."
+            } catch (e: GroqError.NothingHeard) {
+                // Not a failure: the engine heard nothing it could transcribe.
+                AnalyticsManager.logSttNothingHeard()
+                _errorMessage.value = null
+                _statusMessage.value = "🎤 ${e.message}"
             } catch (e: GroqError.TranscriptionFailed) {
                 _errorMessage.value = "Transcription failed: ${e.message}"
             } catch (e: GroqError.TranslationFailed) {
