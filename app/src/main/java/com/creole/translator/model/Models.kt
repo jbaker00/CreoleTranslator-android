@@ -84,4 +84,9 @@ sealed class GroqError : Exception() {
     object InvalidResponse : GroqError() {
         override val message = "Invalid response from server"
     }
+    /** gpt-transcribe declines rather than guesses, so an empty transcript
+     * means "heard nothing usable" — shown as a status, not an error. */
+    object NothingHeard : GroqError() {
+        override val message = "Didn't catch that — try again, a little closer to the microphone."
+    }
 }
