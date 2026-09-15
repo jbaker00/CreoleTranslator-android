@@ -67,6 +67,11 @@ object AnalyticsManager {
         logEvent("auto_detect_flip", Bundle().apply { putString("from", from); putString("to", to) })
     }
 
+    /** User tapped Undo on the auto-detect chip, reverting to their manually selected direction. */
+    fun logAutoDetectUndo(direction: String) {
+        logEvent("auto_detect_undo", Bundle().apply { putString("direction", direction) })
+    }
+
     // Called on every successful translation — this is your core "how many translations" metric
     fun logTranslation(direction: String, charLength: Int, isVoice: Boolean, success: Boolean) {
         val p = Bundle().apply {
@@ -90,6 +95,16 @@ object AnalyticsManager {
     /** STT engine heard nothing transcribable — not a failure. */
     fun logSttNothingHeard() {
         logEvent("stt_nothing_heard", Bundle())
+    }
+
+    /** User tapped 👍/👎 on the translated-text card. */
+    fun logTranslationFeedback(rating: String) {
+        logEvent("translation_feedback", Bundle().apply { putString("rating", rating) })
+    }
+
+    /** User tapped 👍/👎 on the source-text (transcription) card for a voice result. */
+    fun logSttFeedback(rating: String) {
+        logEvent("stt_feedback", Bundle().apply { putString("rating", rating) })
     }
 
     // --- Ad events ---
@@ -126,6 +141,15 @@ object AnalyticsManager {
             putString("reason", reason.take(100))
         }
         logEvent("tts_fallback_to_computer", p)
+    }
+
+    /** OpenAI TTS request failed specifically due to quota exhaustion, before falling back to the device voice. */
+    fun logTtsQuotaExceeded(voice: String, textLength: Int) {
+        val p = Bundle().apply {
+            putString("voice", voice)
+            putInt("text_length", textLength)
+        }
+        logEvent("openai_tts_quota_exceeded", p)
     }
 
     fun logScreenView(screenName: String) {

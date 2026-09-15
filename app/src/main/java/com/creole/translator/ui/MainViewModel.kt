@@ -184,6 +184,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     /** User rejected the auto flip: go back to their direction and translate again there. */
     fun undoAutoDetect() {
         val manual = _autoDetectOverrode.value ?: return
+        AnalyticsManager.logAutoDetectUndo(manual.sourceLanguage)
         _autoDetectOverrode.value = null
         _direction.value = manual
         translateInput(lastInputText, lastInputSource, allowAuto = false)
@@ -350,6 +351,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val sampleId = _currentSampleId.value ?: return
         if (_feedbackGiven.value != null) return
         _feedbackGiven.value = rating
+        AnalyticsManager.logTranslationFeedback(rating.wire)
         viewModelScope.launch { groqService.sendFeedback(sampleId, rating, comment) }
     }
 
@@ -358,6 +360,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val sampleId = _currentSampleId.value ?: return
         if (_sttFeedbackGiven.value != null) return
         _sttFeedbackGiven.value = rating
+        AnalyticsManager.logSttFeedback(rating.wire)
         viewModelScope.launch { groqService.sendFeedback(sampleId, rating, comment, FeedbackTarget.STT) }
     }
 

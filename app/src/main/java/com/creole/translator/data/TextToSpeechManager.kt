@@ -96,7 +96,12 @@ class TextToSpeechManager(
                 playAudioData(audioData, "tts_output.mp3", 1.0)
             } catch (e: Exception) {
                 _lastError.value = "OpenAI TTS failed: ${e.message}"
-                AnalyticsManager.logTtsFallback("openai", language, e.message ?: "unknown")
+                val message = e.message ?: "unknown"
+                val lowerMessage = message.lowercase()
+                if (lowerMessage.contains("insufficient_quota") || lowerMessage.contains("exceeded your current quota")) {
+                    AnalyticsManager.logTtsQuotaExceeded(voice, text.length)
+                }
+                AnalyticsManager.logTtsFallback("openai", language, message)
                 speakWithAndroid(text, language, speed)
             }
         }
