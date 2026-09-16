@@ -1,0 +1,3 @@
+Reconnaissance vocale du créole haïtien plus précise, grâce à un modèle de transcription dédié au créole.
+Correction d'un bug qui pouvait bloquer le bouton d'enregistrement après une tentative ratée.
+Mise à jour du texte de consentement relatif à la confidentialité.

@@ -22,18 +22,28 @@ class AudioRecorder(private val context: Context) {
         val outputFile = File(context.cacheDir, "recording_$timestamp.m4a")
         currentOutputFile = outputFile
 
-        mediaRecorder = createMediaRecorder().apply {
-            setAudioSource(MediaRecorder.AudioSource.MIC)
-            setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
-            setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
-            setAudioSamplingRate(44100)
-            setAudioChannels(1)
-            setAudioEncodingBitRate(128000)
-            setOutputFile(outputFile.absolutePath)
-            prepare()
-            start()
+        val recorder = createMediaRecorder()
+        try {
+            recorder.apply {
+                setAudioSource(MediaRecorder.AudioSource.MIC)
+                setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
+                setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
+                setAudioSamplingRate(44100)
+                setAudioChannels(1)
+                setAudioEncodingBitRate(128000)
+                setOutputFile(outputFile.absolutePath)
+                prepare()
+                start()
+            }
+        } catch (e: Exception) {
+            // Release immediately so a failed prepare()/start() doesn't leak the mic
+            // and block every subsequent attempt until this object is GC'd.
+            recorder.release()
+            currentOutputFile = null
+            throw e
         }
 
+        mediaRecorder = recorder
         return outputFile
     }
 

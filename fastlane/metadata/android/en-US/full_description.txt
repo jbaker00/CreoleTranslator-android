@@ -8,7 +8,7 @@ Translate between Haitian Creole (Kreyòl) and English instantly — by voice or
 📋 HISTORY — Every translation is saved locally so you can review and replay anytime.
 
 HOW IT WORKS
-Haitian Creole Translator uses Whisper (OpenAI's speech recognition model) for accurate voice transcription and state-of-the-art AI models for natural-language translation. The result sounds like a human translated it — not a dictionary lookup.
+Haitian Creole Translator uses speech recognition models tuned separately for Creole and English, plus state-of-the-art AI models for natural-language translation. The result sounds like a human translated it — not a dictionary lookup.
 
 PERFECT FOR
 • Haitian families bridging language barriers with English-speaking relatives

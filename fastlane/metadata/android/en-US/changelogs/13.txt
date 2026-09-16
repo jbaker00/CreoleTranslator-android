@@ -1,0 +1,3 @@
+More accurate Haitian Creole speech recognition, powered by a dedicated transcription model tuned for Creole.
+Fixed a bug where the record button could get stuck failing after a bad recording attempt.
+Updated privacy consent copy for clarity.

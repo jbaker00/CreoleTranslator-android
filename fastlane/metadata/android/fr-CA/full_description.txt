@@ -8,7 +8,7 @@ Traduisez instantanément entre le créole haïtien (Kreyòl) et l'anglais — �
 📚 GUIDE DE PHRASES — 52 expressions essentielles hors-ligne (salutations, urgences, médical, voyage) avec bouton audio.
 
 COMMENT ÇA MARCHE
-L'app utilise Whisper (reconnaissance vocale d'OpenAI) pour une transcription fidèle et Llama 3 pour une traduction naturelle. Le résultat sonne comme traduit par un humain — pas un dictionnaire.
+L'app utilise des modèles de reconnaissance vocale distincts pour le créole et l'anglais, ainsi que des modèles d'IA de pointe pour une traduction naturelle. Le résultat sonne comme traduit par un humain — pas un dictionnaire.
 
 IDÉAL POUR
 • Familles haïtiennes au Canada faisant le pont avec des proches anglophones
@@ -21,4 +21,4 @@ POURQUOI TRADUCTEUR CRÉOLE HAÏTIEN
 La plupart des apps traitent le créole comme une langue secondaire. Celle-ci a été conçue pour les locuteurs du Kreyòl et ceux qui travaillent avec eux. La saisie vocale évite d'avoir à épeler en créole — parlez naturellement.
 
 CONFIDENTIALITÉ
-L'audio est envoyé de façon sécurisée aux services IA pour transcription et traduction, puis supprimé — l'audio n'est jamais conservé. Le texte traduit est conservé 90 jours, sans aucun identifiant, pour que des relecteurs humains vérifient la qualité des traductions. Détails dans notre politique de confidentialité.
+L'audio est envoyé de façon sécurisée aux services IA pour transcription et traduction, puis supprimé — sauf les extraits que vous signalez par un pouce vers le bas (ou jugés peu fiables), conservés 30 jours pour permettre aux relecteurs de corriger les erreurs. Le texte traduit est conservé 90 jours, sans aucun identifiant, pour que des relecteurs humains vérifient la qualité des traductions. Détails dans notre politique de confidentialité.
