@@ -48,7 +48,7 @@ Each row describes **what** the feature does and **where** it lives in each code
 | fr-FR (France) | `fastlane/metadata/android/fr-FR/{title,short_description,full_description}.txt` — `Traducteur Créole Haïtien`, includes phrasebook + offline note |
 | fr-CA (Canada) | `fastlane/metadata/android/fr-CA/{title,short_description,full_description}.txt` — Canada-tuned copy (Québec wording) |
 | Haiti | No Play Store `ht` locale — served by `fr-FR` (French is Haiti's other official store language); `ht` TTS already works in-app |
-| OpenAI TTS model | `tts-1` (pinned server-side in api-proxy) | `tts-1` (pinned server-side in api-proxy) |
+| OpenAI TTS model | `tts-1` (pinned server-side in api-proxy; OpenAI shuts it down 2027-01-06 — named replacement `gpt-realtime-2.1-mini` is Realtime-API, not yet usable on `/v1/audio/speech`) | `tts-1` (pinned server-side in api-proxy; same 2027-01-06 shutdown) |
 
 ## Voice Options (keep in sync)
 
