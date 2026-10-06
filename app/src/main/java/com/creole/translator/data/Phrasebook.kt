@@ -22,13 +22,13 @@ data class PhrasebookCategory(
 object Phrasebook {
     val categories: List<PhrasebookCategory> = listOf(
         PhrasebookCategory("Greetings", "waving_hand", listOf(
-            PhrasebookEntry("Hello / Good day", "Allo bonjou"),
+            PhrasebookEntry("Hello / Good day", "Bonjou"),
             PhrasebookEntry("Good evening", "Bonswa"),
             PhrasebookEntry("How are you?", "Kijan ou ye?"),
             PhrasebookEntry("I'm fine, thank you", "Mwen byen, mèsi"),
             PhrasebookEntry("Thank you", "Mèsi"),
             PhrasebookEntry("You're welcome", "Pa dekwa"),
-            PhrasebookEntry("Please", "Sil vous plè"),
+            PhrasebookEntry("Please", "Souple"),
             PhrasebookEntry("Goodbye", "Orevwa"),
             PhrasebookEntry("My name is...", "Mwen rele..."),
             PhrasebookEntry("Nice to meet you", "Mwen byen kontan fè konesans ou"),
@@ -40,7 +40,7 @@ object Phrasebook {
             PhrasebookEntry("I don't understand", "Mwen pa konprann"),
             PhrasebookEntry("Do you speak English?", "Èske ou pale angle?"),
             PhrasebookEntry("How much does this cost?", "Konbyen sa koute?"),
-            PhrasebookEntry("Where is the bathroom?", "Kote twalèt la ye sil vous plè"),
+            PhrasebookEntry("Where is the bathroom?", "Kote twalèt la ye, souple?"),
             PhrasebookEntry("One, two, three", "En, de, twa"),
         )),
         PhrasebookCategory("Directions", "signpost", listOf(
@@ -59,12 +59,12 @@ object Phrasebook {
             PhrasebookEntry("I need a doctor", "Mwen bezwen yon doktè"),
             PhrasebookEntry("Fire!", "Dife!"),
             PhrasebookEntry("It's an emergency", "Se yon ijans"),
-            PhrasebookEntry("Where is the hospital?", "Kote lopital la?"),
+            PhrasebookEntry("Where is the hospital?", "Kote lopital la ye?"),
             PhrasebookEntry("I am in danger", "Mwen nan danje"),
         )),
         PhrasebookCategory("Medical", "medical_services", listOf(
             PhrasebookEntry("I am sick", "Mwen malad"),
-            PhrasebookEntry("I have a headache", "Mwen gen tèt fè mal"),
+            PhrasebookEntry("I have a headache", "Tèt mwen fè m mal"),
             PhrasebookEntry("I have a fever", "Mwen gen lafyèv"),
             PhrasebookEntry("It hurts here", "Li fè mal isit la"),
             PhrasebookEntry("I am allergic to...", "Mwen fè alèji ak..."),
@@ -73,8 +73,8 @@ object Phrasebook {
             PhrasebookEntry("I need water", "Mwen bezwen dlo"),
         )),
         PhrasebookCategory("Travel", "flight", listOf(
-            PhrasebookEntry("Where is the airport?", "Kote ayewopò a ye sil vous plè"),
-            PhrasebookEntry("I would like a taxi", "Mwen bezwen yon taksi sil vous plè"),
+            PhrasebookEntry("Where is the airport?", "Kote ayewopò a ye, souple?"),
+            PhrasebookEntry("I would like a taxi", "Mwen ta renmen yon taksi, souple"),
             PhrasebookEntry("How do I get to...?", "Kijan pou m rive nan...?"),
             PhrasebookEntry("What time is it?", "Ki lè li ye?"),
             PhrasebookEntry("I am a tourist", "Mwen se yon touris"),
