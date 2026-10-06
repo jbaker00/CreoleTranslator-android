@@ -27,6 +27,9 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.io.File
 
@@ -61,6 +64,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     // Recording state
     private val _isRecording = MutableStateFlow(false)
     val isRecording: StateFlow<Boolean> = _isRecording.asStateFlow()
+
+    // Milliseconds into the current recording, for the progress bar.
+    private val _recordingElapsedMs = MutableStateFlow(0L)
+    val recordingElapsedMs: StateFlow<Long> = _recordingElapsedMs.asStateFlow()
+    private var recordingTicker: Job? = null
 
     private val _isProcessing = MutableStateFlow(false)
     val isProcessing: StateFlow<Boolean> = _isProcessing.asStateFlow()
@@ -121,6 +129,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val disabledMessage = AppAvailabilityManager.disabledMessage
 
     private var currentRecordingFile: File? = null
+
+    init {
+        audioRecorder.onInterrupted = {
+            stopRecordingTicker()
+            _isRecording.value = false
+            currentRecordingFile = null
+            _statusMessage.value = null
+            _errorMessage.value = "Recording stopped by an interruption. Please try again."
+        }
+    }
 
     private val appPrefs = application.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
 
@@ -270,21 +288,51 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             currentRecordingFile = audioRecorder.startRecording()
             _isRecording.value = true
             _statusMessage.value = "Recording... tap again to stop"
+            startRecordingTicker()
         } catch (e: Exception) {
             _errorMessage.value = "Failed to start recording: ${e.message}"
         }
     }
 
-    private fun stopRecordingAndProcess() {
+    // Drives the progress bar and stops the recording at MAX_DURATION_MS.
+    private fun startRecordingTicker() {
+        recordingTicker?.cancel()
+        _recordingElapsedMs.value = 0L
+        recordingTicker = viewModelScope.launch {
+            while (isActive && audioRecorder.isRecording) {
+                val elapsed = audioRecorder.elapsedMs
+                _recordingElapsedMs.value = elapsed.coerceAtMost(AudioRecorder.MAX_DURATION_MS)
+                if (elapsed >= AudioRecorder.MAX_DURATION_MS) {
+                    AnalyticsManager.logRecordingAutoStopped()
+                    stopRecordingAndProcess(autoStopped = true)
+                    return@launch
+                }
+                delay(100)
+            }
+        }
+    }
+
+    private fun stopRecordingTicker() {
+        recordingTicker?.cancel()
+        recordingTicker = null
+        _recordingElapsedMs.value = 0L
+    }
+
+    private fun stopRecordingAndProcess(autoStopped: Boolean = false) {
+        stopRecordingTicker()
         _isRecording.value = false
         _statusMessage.value = null
+        currentRecordingFile = null
 
+        // Null almost always means a too-short tap (the recorder discards those).
         val audioFile = audioRecorder.stopRecording()
         if (audioFile == null || !audioFile.exists() || audioFile.length() == 0L) {
-            _errorMessage.value = "Recording failed or was too short"
+            audioFile?.let { audioRecorder.deleteRecording(it) }
+            _statusMessage.value = "🎤 Too short — tap Start, speak, then tap Stop."
             return
         }
 
+        if (autoStopped) _statusMessage.value = "⏳ Time's up — processing..."
         processAudio(audioFile)
     }
 
@@ -418,6 +466,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     override fun onCleared() {
         super.onCleared()
+        audioRecorder.onInterrupted = null
         if (audioRecorder.isRecording) {
             audioRecorder.cancelRecording()
         }

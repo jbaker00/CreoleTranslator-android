@@ -8,6 +8,7 @@ import com.google.android.gms.ads.AdRequest
 import com.google.android.gms.ads.FullScreenContentCallback
 import com.google.android.gms.ads.LoadAdError
 import com.google.android.gms.ads.interstitial.InterstitialAd
+import com.creole.translator.BuildConfig
 import com.creole.translator.data.AnalyticsManager
 import com.google.android.gms.ads.interstitial.InterstitialAdLoadCallback
 
@@ -24,7 +25,10 @@ class InterstitialAdManager(private val context: Context) {
         // heavy users hit the session cap once and never see interstitials again.
         const val SESSION_RESET_AFTER_BACKGROUND_MS = 30L * 60 * 1000
 
-        private const val AD_UNIT_ID = "ca-app-pub-7871017136061682/7673641342"
+        // Google's test unit in debug — clicking real ads on our own devices risks AdMob invalid-traffic flags.
+        private const val TEST_AD_UNIT_ID = "ca-app-pub-3940256099942544/1033173712"
+        private const val PROD_AD_UNIT_ID = "ca-app-pub-7871017136061682/7673641342"
+        private val AD_UNIT_ID = if (BuildConfig.DEBUG) TEST_AD_UNIT_ID else PROD_AD_UNIT_ID
     }
 
     private var interstitialAd: InterstitialAd? = null

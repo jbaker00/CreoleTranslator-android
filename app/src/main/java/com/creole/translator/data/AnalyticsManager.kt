@@ -97,6 +97,11 @@ object AnalyticsManager {
         logEvent("stt_nothing_heard", Bundle())
     }
 
+    /** Recording hit AudioRecorder.MAX_DURATION_MS and stopped itself. */
+    fun logRecordingAutoStopped() {
+        logEvent("recording_auto_stopped", Bundle())
+    }
+
     /** User tapped 👍/👎 on the translated-text card. */
     fun logTranslationFeedback(rating: String) {
         logEvent("translation_feedback", Bundle().apply { putString("rating", rating) })

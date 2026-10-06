@@ -17,19 +17,24 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.creole.translator.data.AudioRecorder
 import com.creole.translator.model.FeedbackRating
 import com.creole.translator.model.TranslationDirection
 import com.creole.translator.ui.theme.BrandPink
 import com.creole.translator.ui.theme.BrandPurple
 import com.creole.translator.ui.theme.RecordingRed
+import com.creole.translator.ui.theme.WarningOrange
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen(viewModel: MainViewModel) {
     val isRecording by viewModel.isRecording.collectAsState()
+    val recordingElapsedMs by viewModel.recordingElapsedMs.collectAsState()
     val isProcessing by viewModel.isProcessing.collectAsState()
     val direction by viewModel.direction.collectAsState()
     val transcription by viewModel.transcription.collectAsState()
@@ -96,6 +101,9 @@ fun MainScreen(viewModel: MainViewModel) {
                     isProcessing = isProcessing,
                     onClick = { viewModel.toggleRecording() }
                 )
+                if (isRecording) {
+                    RecordingProgress(elapsedMs = recordingElapsedMs)
+                }
             } else {
                 TextInputSection(
                     text = typedInput,
@@ -455,6 +463,45 @@ private fun RecordButton(
             fontSize = 13.sp,
             color = if (isRecording) RecordingRed else MaterialTheme.colorScheme.onSurfaceVariant
         )
+    }
+}
+
+/**
+ * Fills toward AudioRecorder.MAX_DURATION_MS so people can see how long they have left.
+ * Turns orange past WARN_AFTER_MS, where translation accuracy starts dropping.
+ * Mirrors iOS RecordingProgressView.
+ */
+@Composable
+private fun RecordingProgress(elapsedMs: Long) {
+    val isLong = elapsedMs >= AudioRecorder.WARN_AFTER_MS
+    val remaining = ((AudioRecorder.MAX_DURATION_MS - elapsedMs).coerceAtLeast(0L) + 999) / 1000
+    val color = if (isLong) WarningOrange else RecordingRed
+
+    Surface(
+        shape = RoundedCornerShape(10.dp),
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 14.dp)
+            .clearAndSetSemantics { contentDescription = "Recording, $remaining seconds left" }
+    ) {
+        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            LinearProgressIndicator(
+                progress = { elapsedMs.toFloat() / AudioRecorder.MAX_DURATION_MS },
+                color = color,
+                trackColor = color.copy(alpha = 0.2f),
+                modifier = Modifier.fillMaxWidth()
+            )
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                val textColor = if (isLong) WarningOrange else MaterialTheme.colorScheme.onSurfaceVariant
+                Text(
+                    if (isLong) "Shorter phrases translate best" else "Speak one or two sentences",
+                    fontSize = 12.sp,
+                    color = textColor
+                )
+                Text("${remaining}s left", fontSize = 12.sp, color = textColor)
+            }
+        }
     }
 }
 

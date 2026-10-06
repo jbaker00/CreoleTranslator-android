@@ -10,13 +10,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
+import com.creole.translator.BuildConfig
 import com.google.android.gms.ads.AdListener
 import com.google.android.gms.ads.AdRequest
 import com.google.android.gms.ads.AdSize
 import com.google.android.gms.ads.AdView
 import com.google.android.gms.ads.LoadAdError
 
-const val BANNER_AD_UNIT_ID = "ca-app-pub-7871017136061682/5853776375"
+// Google's test unit in debug — clicking real ads on our own devices risks AdMob invalid-traffic flags.
+private const val TEST_BANNER_AD_UNIT_ID = "ca-app-pub-3940256099942544/9214589741"
+private const val PROD_BANNER_AD_UNIT_ID = "ca-app-pub-7871017136061682/5853776375"
+private val BANNER_AD_UNIT_ID = if (BuildConfig.DEBUG) TEST_BANNER_AD_UNIT_ID else PROD_BANNER_AD_UNIT_ID
 
 // Adaptive anchored banner — pays significantly more than fixed BANNER (320x50)
 // and respects gesture navigation insets so ads don't sit in the swipe zone.
