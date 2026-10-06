@@ -74,11 +74,12 @@ that has been checked for parity, so the next sync only looks at newer commits.
 | Debug builds use test ad units (banner, interstitial) | iOS | Android | a8b5b10 | pending |
 | Phrasebook Kreyòl corrections | iOS | Android | 5ebe5ad | pending |
 | Deep link `creoletranslator://phrasebook` | iOS | Android | 4d2f398 | pending |
+| Consent text names the real AI recipients — "Your speech is sent to OpenAI (Haitian Creole) or Groq (English) for transcription, with the other as a backup; text is translated by Groq, and translated text is sent to OpenAI or Groq to generate spoken audio." — plus consent version 2 (people who agreed to the old Groq-only text see it once) | iOS | Android | 60d4eb8, a361ef6 | pending |
 
 ### Last reviewed
 | Repo | Last commit reviewed for parity | Date |
 |---|---|---|
-| iOS (`CreoleTranslator-iOS` main) | 4d2f398 (branch phrasebook-fixes-3.5, merging to main) | 2026-10-06 |
+| iOS (`CreoleTranslator-iOS` main) | 7266d9c | 2026-10-06 |
 | Android (`CreoleTranslator-android` main) | 1ceb6fd | 2026-10-06 |
 
 ## Adding a New Feature — Checklist
