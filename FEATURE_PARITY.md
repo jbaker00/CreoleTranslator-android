@@ -27,6 +27,7 @@ Each row describes **what** the feature does and **where** it lives in each code
 | Debug builds use Google's test ad units for every format (banner, interstitial, rewarded), production units only in release — avoids AdMob invalid-traffic flags from self-testing | `ui/BannerAd.kt`, `ui/InterstitialAdManager.kt`, `ui/RewardedAdManager.kt` (`BuildConfig.DEBUG`) | `BannerAdView.swift`, `InterstitialAdManager.swift`, `RewardedAdManager.swift` (`#if DEBUG`) |
 | Recording limit — 30s max (auto-stop + translate, analytics `recording_auto_stopped`), progress bar with "Ns left" turning orange after 20s ("Shorter phrases translate best"), clips <0.6s discarded ("Too short — tap Start, speak, then tap Stop."), interruption (call/Siri/audio-focus loss) discards the clip and shows "Recording stopped by an interruption. Please try again." Rationale: 3,632 voice samples, confidence ≤3 for 21% of <10s clips vs 57%+ past 20s | `data/AudioRecorder.kt` + `ui/MainScreen.kt` + `MainViewModel` | `AudioRecorder.swift` (`maxDuration`/`warnAfter`/`minDuration`) + `ContentView.swift` `RecordingProgressView` |
 | Deep link `creoletranslator://phrasebook` opens the phrasebook (analytics `deep_link_open`); used by App Store In-App Events, available for Play promotional content / shared links | `AndroidManifest.xml` intent-filter (scheme `creoletranslator`) + `MainActivity` intent handling | `Info.plist` `CFBundleURLTypes` + `ContentView.onOpenURL` |
+| AI data disclosure — "Your speech is sent to OpenAI (Haitian Creole) or Groq (English) for transcription, with the other as a backup; text is translated by Groq, and translated text is sent to OpenAI or Groq to generate spoken audio." + retention/review sentences; text identical on both | `ui/SettingsScreen.kt` Privacy section (always-visible text, no consent gate) | `DataPrivacyConsent.swift` consent sheet (`currentVersion` = 2 re-asks once when a new recipient is named) |
 | Result cards with speak buttons | `MainScreen.ResultCard` | `ContentView.ResultCard` |
 | Language auto-detect — offline Creole/English heuristic on typed text and on the transcript; when ON and confident it disagrees with the selected direction, translates the detected way, flips the direction indicator, shows an "Auto-detected X → Y · Undo" chip; Undo re-translates in the manual direction. Settings → Translation → "Auto-detect language" toggle (default ON). Analytics `auto_detect_flip` | `data/LanguageDetector.kt` (unit-tested in `app/src/test/.../LanguageDetectorTest.kt`) + `MainViewModel.effectiveDirection()/undoAutoDetect()` + `MainScreen.AutoDetectChip` + `VoiceSettings.autoDetectLanguage` + `SettingsScreen` | `ContentView.swift` + `TextToSpeechManager.swift` / `VoiceSettings.swift` (iOS fork) |
 | TTS payload carries `language: "ht"\|"en"` on `/v1/tts` (and `/v1/tts-groq` on iOS) so the proxy can apply Creole pronunciation respellings | `data/TextToSpeechManager.synthesizeWithOpenAI()` | `TextToSpeechManager.swift` (iOS fork) |
@@ -70,16 +71,16 @@ that has been checked for parity, so the next sync only looks at newer commits.
 ### Pending ports
 | Feature (see rows above) | From | To | Source commit(s) | Status |
 |---|---|---|---|---|
-| Recording limit + progress bar + short-clip discard + interruption discard | iOS | Android | a8b5b10 | pending |
-| Debug builds use test ad units (banner, interstitial) | iOS | Android | a8b5b10 | pending |
-| Phrasebook Kreyòl corrections | iOS | Android | 5ebe5ad | pending |
-| Deep link `creoletranslator://phrasebook` | iOS | Android | 4d2f398 | pending |
-| Consent text names the real AI recipients — "Your speech is sent to OpenAI (Haitian Creole) or Groq (English) for transcription, with the other as a backup; text is translated by Groq, and translated text is sent to OpenAI or Groq to generate spoken audio." — plus consent version 2 (people who agreed to the old Groq-only text see it once) | iOS | Android | 60d4eb8, a361ef6 | pending |
+| Recording limit + progress bar + short-clip discard + interruption discard | iOS | Android | a8b5b10 | done (23105a7) |
+| Debug builds use test ad units (banner, interstitial) | iOS | Android | a8b5b10 | done (23105a7) |
+| Phrasebook Kreyòl corrections | iOS | Android | 5ebe5ad | done (eba86da) |
+| Deep link `creoletranslator://phrasebook` | iOS | Android | 4d2f398 | done (72f5967) |
+| Consent text names the real AI recipients — "Your speech is sent to OpenAI (Haitian Creole) or Groq (English) for transcription, with the other as a backup; text is translated by Groq, and translated text is sent to OpenAI or Groq to generate spoken audio." — plus consent version 2 (people who agreed to the old Groq-only text see it once) | iOS | Android | 60d4eb8, a361ef6 | done (72f5967) — text only; Android has no AI-consent gate to re-ask (disclosure lives in Settings), so the version-2 re-ask is N/A |
 
 ### Last reviewed
 | Repo | Last commit reviewed for parity | Date |
 |---|---|---|
-| iOS (`CreoleTranslator-iOS` main) | 7266d9c | 2026-10-06 |
+| iOS (`CreoleTranslator-iOS` main) | cda4cd2 | 2026-10-10 |
 | Android (`CreoleTranslator-android` main) | 1ceb6fd | 2026-10-06 |
 
 ## Adding a New Feature — Checklist
