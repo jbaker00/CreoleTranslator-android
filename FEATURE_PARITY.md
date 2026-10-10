@@ -8,7 +8,6 @@ Each row describes **what** the feature does and **where** it lives in each code
 | Feature | Android | iOS |
 |---------|---------|-----|
 | Voice recording → transcription (OpenAI gpt-transcribe for Creole via `x-stt-engine`, Groq Whisper for English/backup; blank transcript → `NothingHeard` status) | `data/AudioRecorder.kt` + `data/GroqService.kt` | `AudioRecorder.swift` + `GroqService.swift` |
-| Recording limit — max 30s (auto-stops and translates, status "⏳ Time's up — processing...", analytics `recording_auto_stopped`), warning after 20s, clips <0.6s discarded ("🎤 Too short — tap Start, speak, then tap Stop."). Progress bar under Stop fills toward 30s with "Xs left" + "Speak one or two sentences", turns orange past 20s ("Shorter phrases translate best"); accessibility label "Recording, N seconds left". Why: across 3,632 voice samples, confidence ≤3 for 21% of <10s clips, 43% at 10–20s, 57%+ past 20s. Interruptions (call / audio-focus loss / mic silenced) discard the clip with "Recording stopped by an interruption. Please try again." | `data/AudioRecorder.kt` (`MAX_DURATION_MS`/`WARN_AFTER_MS`/`MIN_DURATION_MS`, `onInterrupted`) + `MainViewModel.startRecordingTicker()` + `MainScreen.RecordingProgress` | `AudioRecorder.swift` (`maxDuration`/`warnAfter`/`minDuration`, `onAutoStop`) + `RecordingProgressView` in `ContentView.swift` |
 | Text input mode (type to translate) | `ui/MainScreen.kt` `TextInputSection` + `MainViewModel.submitTypedText()` | `ContentView.swift` `InputMode.text` + `processTextInput()` |
 | Direction switcher (Creole↔English) | `MainViewModel.switchDirection()` | `ContentView.translationDirection` |
 | Translation via Groq (openai/gpt-oss-120b) | `data/GroqService.translateText()` | `GroqService.translateText()` |
@@ -23,8 +22,11 @@ Each row describes **what** the feature does and **where** it lives in each code
 | Rewarded ad — unlock extra voices 24h (free: `diana`, `alloy`; gate at selection; pre-ad "Unlock Extra Voices" confirm + post-ad "Voices Unlocked" dialogs, bilingual EN + Haitian Creole copy, footer shows hours left; waits ≤3s for ad load, then no-fill/present-failure grants unlock anyway; selected voice stays usable ("Your current voice — always available"); iOS unit `CreoleTranslatorRewarded` ca-app-pub-7871017136061682/5611090338, DEBUG builds use Google test unit | `ui/RewardedAdManager.kt` + `data/VoiceSettings.kt` + `ui/SettingsScreen.kt` | `RewardedAdManager.swift` + `VoiceSettings.swift` + `SettingsView.swift` |
 | In-app review prompt — SKStoreReviewController / Play In-App Review at 3rd lifetime successful translation, once per app version, fires one translation before the first interstitial so it never overlaps an ad | `ui/MainViewModel.kt` (`maybeRequestReview`) + `MainActivity.kt` (`ReviewManagerFactory`) | `ContentView.swift` (`maybeRequestReview`) |
 | Translation history (max 50) | `data/TranslationHistoryManager.kt` + `ui/HistoryScreen.kt` | `TranslationHistory.swift` + `HistoryView.swift` |
-| Phrasebook — offline 52 phrases, 6 categories (Greetings/Basics/Directions/Emergency/Medical/Travel), reversible EN↔HT direction, speaker button per phrase | `data/Phrasebook.kt` + `ui/PhrasebookScreen.kt` + `MainViewModel.showPhrasebook()` | `Phrasebook.swift` + `PhrasebookView.swift` |
-| Banner ads — anchored adaptive size (full width, reloads at the new size on width/orientation change); DEBUG builds use Google's test unit (interstitial too) | `ui/BannerAd.kt` | `BannerAdView.swift` |
+| Phrasebook — offline 52 phrases, 6 categories (Greetings/Basics/Directions/Emergency/Medical/Travel), reversible EN↔HT direction, speaker button per phrase. **Phrase text must be identical on both platforms** (Kreyòl corrections 2026-10-06: "Bonjou", "Souple" not "Sil vous plè", "Kote lopital la ye?", "Tèt mwen fè m mal", "Mwen ta renmen yon taksi, souple") | `data/Phrasebook.kt` + `ui/PhrasebookScreen.kt` + `MainViewModel.showPhrasebook()` | `Phrasebook.swift` + `PhrasebookView.swift` |
+| Banner ads — anchored adaptive size (full width, Google-chosen height), re-requested only when the width actually changes | `ui/BannerAd.kt` | `BannerAdView.swift` (tracks requested size in a Coordinator; reading `BannerView.adSize` back after init gives 0×0 and re-loading then served a 2×-wide clipped ad) |
+| Debug builds use Google's test ad units for every format (banner, interstitial, rewarded), production units only in release — avoids AdMob invalid-traffic flags from self-testing | `ui/BannerAd.kt`, `ui/InterstitialAdManager.kt`, `ui/RewardedAdManager.kt` (`BuildConfig.DEBUG`) | `BannerAdView.swift`, `InterstitialAdManager.swift`, `RewardedAdManager.swift` (`#if DEBUG`) |
+| Recording limit — 30s max (auto-stop + translate, analytics `recording_auto_stopped`), progress bar with "Ns left" turning orange after 20s ("Shorter phrases translate best"), clips <0.6s discarded ("Too short — tap Start, speak, then tap Stop."), interruption (call/Siri/audio-focus loss) discards the clip and shows "Recording stopped by an interruption. Please try again." Rationale: 3,632 voice samples, confidence ≤3 for 21% of <10s clips vs 57%+ past 20s | `data/AudioRecorder.kt` + `ui/MainScreen.kt` + `MainViewModel` | `AudioRecorder.swift` (`maxDuration`/`warnAfter`/`minDuration`) + `ContentView.swift` `RecordingProgressView` |
+| Deep link `creoletranslator://phrasebook` opens the phrasebook (analytics `deep_link_open`); used by App Store In-App Events, available for Play promotional content / shared links | `AndroidManifest.xml` intent-filter (scheme `creoletranslator`) + `MainActivity` intent handling | `Info.plist` `CFBundleURLTypes` + `ContentView.onOpenURL` |
 | Result cards with speak buttons | `MainScreen.ResultCard` | `ContentView.ResultCard` |
 | Language auto-detect — offline Creole/English heuristic on typed text and on the transcript; when ON and confident it disagrees with the selected direction, translates the detected way, flips the direction indicator, shows an "Auto-detected X → Y · Undo" chip; Undo re-translates in the manual direction. Settings → Translation → "Auto-detect language" toggle (default ON). Analytics `auto_detect_flip` | `data/LanguageDetector.kt` (unit-tested in `app/src/test/.../LanguageDetectorTest.kt`) + `MainViewModel.effectiveDirection()/undoAutoDetect()` + `MainScreen.AutoDetectChip` + `VoiceSettings.autoDetectLanguage` + `SettingsScreen` | `ContentView.swift` + `TextToSpeechManager.swift` / `VoiceSettings.swift` (iOS fork) |
 | TTS payload carries `language: "ht"\|"en"` on `/v1/tts` (and `/v1/tts-groq` on iOS) so the proxy can apply Creole pronunciation respellings | `data/TextToSpeechManager.synthesizeWithOpenAI()` | `TextToSpeechManager.swift` (iOS fork) |
@@ -59,11 +61,35 @@ Each row describes **what** the feature does and **where** it lives in each code
 ### English / Groq voices
 `autumn`, `diana`, `hannah`, `austin`, `daniel`, `troy`
 
+## Parity Sync Status
+
+Read by the `parity-sync` skill. "Pending ports" is the to-do list for each
+platform; "Last reviewed" is the newest commit on the other platform's `main`
+that has been checked for parity, so the next sync only looks at newer commits.
+
+### Pending ports
+| Feature (see rows above) | From | To | Source commit(s) | Status |
+|---|---|---|---|---|
+| Recording limit + progress bar + short-clip discard + interruption discard | iOS | Android | a8b5b10 | pending |
+| Debug builds use test ad units (banner, interstitial) | iOS | Android | a8b5b10 | pending |
+| Phrasebook Kreyòl corrections | iOS | Android | 5ebe5ad | pending |
+| Deep link `creoletranslator://phrasebook` | iOS | Android | 4d2f398 | pending |
+| Consent text names the real AI recipients — "Your speech is sent to OpenAI (Haitian Creole) or Groq (English) for transcription, with the other as a backup; text is translated by Groq, and translated text is sent to OpenAI or Groq to generate spoken audio." — plus consent version 2 (people who agreed to the old Groq-only text see it once) | iOS | Android | 60d4eb8, a361ef6 | pending |
+
+### Last reviewed
+| Repo | Last commit reviewed for parity | Date |
+|---|---|---|
+| iOS (`CreoleTranslator-iOS` main) | 7266d9c | 2026-10-06 |
+| Android (`CreoleTranslator-android` main) | 1ceb6fd | 2026-10-06 |
+
 ## Adding a New Feature — Checklist
 
 1. Implement in **one** platform first and get it working end-to-end.
 2. Open this file and add a row to the table above.
-3. Port to the other platform, referencing the file path from step 2.
+3. Port to the other platform, referencing the file path from step 2. If you
+   can't port it in the same session, add a **Pending ports** row (Parity Sync
+   Status) instead — then `/parity-sync` in the other repo picks it up. Items
+   that are intentionally one-platform go under **Platform-Only Items**.
 4. If a new API key or model is needed, add it to the **Key Constants** table.
 5. Commit both changes together (or in back-to-back commits) so git history stays linked.
 
@@ -71,6 +97,10 @@ Each row describes **what** the feature does and **where** it lives in each code
 
 | Item | Android only | iOS only |
 |------|-------------|----------|
+| Header subtitle | — (no subtitle line) | "AI voice translation" (was "Powered by Groq AI") |
+| Audio session threading | — | `AVAudioSession.workQueue` (AudioRecorder.swift): setActive/setCategory off the main thread, shared by recording + TTS |
+| Store-screenshot capture mode | — | DEBUG `ScreenshotMode.swift` (`-shotScene …`) + `marketing/` frame script |
+| Privacy manifest | — | `PrivacyInfo.xcprivacy` (ITMS-91053/91064) |
 | Privacy / ATT consent | Google UMP (AdMob) `ui/ConsentManager.kt` | `DataPrivacyConsent.swift` + `ATTAuthorization.swift` |
 | Firebase Analytics | — | `FirebaseAnalytics` TTS fallback logging |
 | Remote kill switch | `data/AppAvailabilityManager.kt` + `ui/AppDisabledScreen.kt` — Firebase Remote Config keys `android_app_disabled` (bool) / `android_disabled_message` (string), fetched in `MainActivity.onCreate`. Deliberately **not** ported to iOS: flipping these keys in the Firebase console pulls the Android app's functionality without touching iOS, since the iOS client never reads them (even though both apps share the `globalvibes-1a6aa` Firebase project). Does not affect the `api-proxy` Cloud Function that both platforms call for transcription/translation/TTS. | — |
