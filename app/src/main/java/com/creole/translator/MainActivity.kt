@@ -1,6 +1,7 @@
 package com.creole.translator
 
 import android.Manifest
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -50,6 +51,19 @@ class MainActivity : ComponentActivity() {
         if (!granted) {
             // Permission denied; MainScreen will show an error when user tries to record
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        handleDeepLink(intent)
+    }
+
+    // creoletranslator://phrasebook — mirrors iOS ContentView.onOpenURL.
+    private fun handleDeepLink(intent: Intent?) {
+        val uri = intent?.data ?: return
+        if (intent.action != Intent.ACTION_VIEW || uri.scheme != "creoletranslator") return
+        AnalyticsManager.logDeepLinkOpen(uri.host ?: "")
+        if (uri.host == "phrasebook") viewModel.showPhrasebook()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -103,6 +117,10 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+
+        // Only on a fresh launch: after rotation the intent is the same and the
+        // ViewModel already holds the screen the user navigated to since.
+        if (savedInstanceState == null) handleDeepLink(intent)
 
         if (!viewModel.hasMicPermission()) {
             requestMicPermission.launch(Manifest.permission.RECORD_AUDIO)

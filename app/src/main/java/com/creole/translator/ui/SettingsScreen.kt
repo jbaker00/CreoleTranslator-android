@@ -367,7 +367,7 @@ fun SettingsScreen(viewModel: MainViewModel, rewardedAd: RewardedAdManager) {
             }
             item {
                 Text(
-                    "Your speech is sent to Groq AI for transcription/translation and to OpenAI for spoken audio. Translated text (never linked to you) is kept for up to 90 days so Creole speakers can review quality; voice recordings are kept only when a translation is flagged, for up to 30 days. Items you flag with 👎 may be shown to reviewers right away; everything else is shown only once it is 10 days old. See our Privacy Policy for details and how to request deletion.",
+                    "Your speech is sent to OpenAI (Haitian Creole) or Groq (English) for transcription, with the other as a backup; text is translated by Groq, and translated text is sent to OpenAI or Groq to generate spoken audio. Translated text (never linked to you) is kept for up to 90 days so Creole speakers can review quality; voice recordings are kept only when a translation is flagged, for up to 30 days. Items you flag with 👎 may be shown to reviewers right away; everything else is shown only once it is 10 days old. See our Privacy Policy for details and how to request deletion.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)

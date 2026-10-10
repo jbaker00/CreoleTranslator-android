@@ -97,6 +97,11 @@ object AnalyticsManager {
         logEvent("stt_nothing_heard", Bundle())
     }
 
+    /** App opened from a creoletranslator:// link (target = the link's host). */
+    fun logDeepLinkOpen(target: String) {
+        logEvent("deep_link_open", Bundle().apply { putString("target", target) })
+    }
+
     /** Recording hit AudioRecorder.MAX_DURATION_MS and stopped itself. */
     fun logRecordingAutoStopped() {
         logEvent("recording_auto_stopped", Bundle())
