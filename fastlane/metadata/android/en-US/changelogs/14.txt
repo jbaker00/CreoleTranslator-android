@@ -1,0 +1,5 @@
+Recordings now show a progress bar with time left, and stop automatically at 30 seconds — shorter phrases translate more accurately.
+Accidental quick taps are ignored instead of being sent.
+If a call or another app interrupts a recording, it's discarded so you can try again.
+Phrasebook corrections for more natural Haitian Creole.
+Clearer privacy text about which AI services process your speech.

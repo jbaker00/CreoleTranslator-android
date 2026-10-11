@@ -1,0 +1,5 @@
+Une barre de progression indique le temps restant ; l'enregistrement s'arrête automatiquement à 30 secondes, car les phrases courtes sont mieux traduites.
+Les appuis trop brefs sont ignorés au lieu d'être envoyés.
+Si un appel ou une autre application interrompt l'enregistrement, il est annulé pour que vous puissiez réessayer.
+Corrections du guide de conversation pour un créole haïtien plus naturel.
+Texte de confidentialité plus clair sur les services d'IA qui traitent votre voix.
