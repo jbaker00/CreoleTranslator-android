@@ -1,5 +1,7 @@
 package com.creole.translator.ui
 
+import com.creole.translator.ui.theme.appPalette
+import com.creole.translator.ui.theme.HeaderPink
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -48,7 +50,7 @@ fun PhrasebookScreen(viewModel: MainViewModel) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(Brush.horizontalGradient(listOf(BrandPurple, BrandPink)))
+                    .background(Brush.horizontalGradient(listOf(BrandPurple, HeaderPink)))
                     .statusBarsPadding()
                     .padding(horizontal = 4.dp, vertical = 8.dp)
             ) {
@@ -69,7 +71,8 @@ fun PhrasebookScreen(viewModel: MainViewModel) {
                     Text(
                         text = "Works offline",
                         fontSize = 11.sp,
-                        color = Color.White.copy(alpha = 0.85f),
+                        fontWeight = FontWeight.Medium,
+                        color = Color.White,
                         modifier = Modifier.padding(end = 8.dp)
                     )
                 }
@@ -126,7 +129,7 @@ fun PhrasebookScreen(viewModel: MainViewModel) {
                             Icon(
                                 iconForCategory(category.name),
                                 contentDescription = null,
-                                tint = BrandPurple,
+                                tint = appPalette.accent,
                                 modifier = Modifier.size(18.dp)
                             )
                             Spacer(Modifier.width(8.dp))
@@ -134,7 +137,7 @@ fun PhrasebookScreen(viewModel: MainViewModel) {
                                 category.name,
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.SemiBold,
-                                color = BrandPurple
+                                color = appPalette.accent
                             )
                         }
                     }
@@ -213,7 +216,7 @@ private fun PhrasebookRow(
                 Icon(
                     if (isSpeakingThis && isSpeaking) Icons.Default.VolumeUp else Icons.Default.VolumeUp,
                     contentDescription = "Speak",
-                    tint = BrandPurple,
+                    tint = appPalette.accent,
                     modifier = Modifier.size(20.dp)
                 )
             }

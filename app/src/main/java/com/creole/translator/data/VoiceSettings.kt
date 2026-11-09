@@ -30,13 +30,6 @@ class VoiceSettings(context: Context) {
         val englishProviders = listOf(TTSProvider.OPENAI, TTSProvider.SYSTEM)
         val creoleProviders  = listOf(TTSProvider.OPENAI, TTSProvider.SYSTEM)
 
-        // Default voices stay free; the rest are "premium" and unlock for 24h
-        // after watching a rewarded ad. Already-selected voices are grandfathered
-        // (the gate applies at selection time only). Same set as iOS — "diana"
-        // is a Groq voice that doesn't exist in the Android voice list.
-        val freeVoiceIds = setOf("diana", "alloy")
-        const val PREMIUM_UNLOCK_HOURS = 24L
-
         fun displayName(provider: TTSProvider) = when (provider) {
             TTSProvider.GROQ   -> "OpenAI"  // GROQ kept for migration compat, treated as OPENAI
             TTSProvider.OPENAI -> "OpenAI"
@@ -85,21 +78,9 @@ class VoiceSettings(context: Context) {
     )
     val creolePlaybackSpeed: StateFlow<Double> = _creolePlaybackSpeed.asStateFlow()
 
-    // Premium voice unlock (rewarded ad)
-    private val _premiumUnlockedUntil = MutableStateFlow(prefs.getLong("premiumVoicesUnlockedUntil", 0L))
-    val premiumUnlockedUntil: StateFlow<Long> = _premiumUnlockedUntil.asStateFlow()
-
-    fun premiumVoicesUnlocked(): Boolean =
-        System.currentTimeMillis() < _premiumUnlockedUntil.value
-
-    fun unlockPremiumVoices() {
-        val until = System.currentTimeMillis() + PREMIUM_UNLOCK_HOURS * 3600_000L
-        _premiumUnlockedUntil.value = until
-        prefs.edit().putLong("premiumVoicesUnlockedUntil", until).apply()
-    }
-
-    fun isVoiceLocked(id: String): Boolean =
-        id !in freeVoiceIds && !premiumVoicesUnlocked()
+    /** True when the selected provider for this language is an AI ("HD") voice. */
+    fun usesHDVoice(isCreole: Boolean): Boolean =
+        (if (isCreole) _creoleProvider.value else _englishProvider.value) != TTSProvider.SYSTEM
 
     fun setEnglishProvider(p: TTSProvider) {
         _englishProvider.value = p

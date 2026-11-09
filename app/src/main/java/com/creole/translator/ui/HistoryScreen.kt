@@ -1,5 +1,7 @@
 package com.creole.translator.ui
 
+import com.creole.translator.ui.theme.appPalette
+import com.creole.translator.ui.theme.HeaderPink
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -58,7 +60,7 @@ fun HistoryScreen(viewModel: MainViewModel) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(Brush.horizontalGradient(listOf(BrandPurple, BrandPink)))
+                    .background(Brush.horizontalGradient(listOf(BrandPurple, HeaderPink)))
                     .statusBarsPadding()
                     .padding(horizontal = 4.dp, vertical = 8.dp)
             ) {
@@ -103,7 +105,7 @@ fun HistoryScreen(viewModel: MainViewModel) {
                     Text(
                         "Record something to get started!",
                         fontSize = 13.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                        color = appPalette.secondaryText
                     )
                 }
             }
@@ -196,7 +198,7 @@ private fun HistoryEntryCard(
                         Icons.Default.VolumeUp,
                         contentDescription = "Speak source",
                         modifier = Modifier.size(16.dp),
-                        tint = BrandPurple
+                        tint = appPalette.accent
                     )
                 }
             }
@@ -227,7 +229,7 @@ private fun HistoryEntryCard(
                         Icons.Default.VolumeUp,
                         contentDescription = "Speak translation",
                         modifier = Modifier.size(16.dp),
-                        tint = BrandPurple
+                        tint = appPalette.accent
                     )
                 }
             }

@@ -1,5 +1,8 @@
 package com.creole.translator.ui
 
+import com.creole.translator.ui.theme.appPalette
+import com.creole.translator.ui.theme.HeaderPink
+import android.app.Activity
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -17,22 +20,28 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.creole.translator.data.AnalyticsManager
 import com.creole.translator.data.AudioRecorder
+import com.creole.translator.data.HDVoiceCredits
+import com.creole.translator.data.TTSProvider
 import com.creole.translator.model.FeedbackRating
 import com.creole.translator.model.TranslationDirection
 import com.creole.translator.ui.theme.BrandPink
 import com.creole.translator.ui.theme.BrandPurple
 import com.creole.translator.ui.theme.RecordingRed
 import com.creole.translator.ui.theme.WarningOrange
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MainScreen(viewModel: MainViewModel) {
+fun MainScreen(viewModel: MainViewModel, rewardedAd: RewardedAdManager) {
     val isRecording by viewModel.isRecording.collectAsState()
     val recordingElapsedMs by viewModel.recordingElapsedMs.collectAsState()
     val isProcessing by viewModel.isProcessing.collectAsState()
@@ -53,6 +62,183 @@ fun MainScreen(viewModel: MainViewModel) {
     val autoDetectOverrode by viewModel.autoDetectOverrode.collectAsState()
     var showCommentDialog by remember { mutableStateOf(false) }
     var showSttCommentDialog by remember { mutableStateOf(false) }
+
+    // ── HD voice plays (mirrors iOS ContentView playCard/watchAdForHDPlays) ──
+    val hdPlaysLeft by viewModel.hdCredits.playsLeft.collectAsState()
+    val englishProvider by viewModel.voiceSettings.englishProvider.collectAsState()
+    val creoleProvider by viewModel.voiceSettings.creoleProvider.collectAsState()
+    val activity = LocalContext.current as? Activity
+    val scope = rememberCoroutineScope()
+    // Card tapped while out of HD plays; played after the ad (or with the basic voice).
+    var pendingPlay by remember { mutableStateOf<PendingPlay?>(null) }
+    var showOutOfHDPrompt by remember { mutableStateOf(false) }
+    var showHDInfo by remember { mutableStateOf(false) }
+    var showHDGranted by remember { mutableStateOf(false) }
+    var showNoVideo by remember { mutableStateOf(false) }
+    var isWatchingAd by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) { rewardedAd.preload() }
+
+    fun usesHDVoice(language: String) =
+        (if (language == "ht") creoleProvider else englishProvider) != TTSProvider.SYSTEM
+
+    fun playCard(text: String, language: String) {
+        if (isSpeaking) {
+            viewModel.stopSpeaking()
+            return
+        }
+        if (hdPlaysLeft == 0 && viewModel.usesHDPlay(text, language)) {
+            if (isWatchingAd) return
+            pendingPlay = PendingPlay(text, language)
+            showOutOfHDPrompt = true
+            AnalyticsManager.logHdVoiceOutPrompt(language)
+            return
+        }
+        viewModel.speakText(text, language)
+    }
+
+    fun playPendingWithBasicVoice() {
+        val pending = pendingPlay ?: return
+        pendingPlay = null
+        AnalyticsManager.logHdVoiceBasicChosen(pending.language)
+        viewModel.speakText(pending.text, pending.language, basicVoice = true)
+    }
+
+    // Plays the card that triggered the ad; the audio is the confirmation.
+    fun finishHDGrant() {
+        val pending = pendingPlay
+        if (pending == null) {
+            showHDGranted = true
+            return
+        }
+        pendingPlay = null
+        viewModel.speakText(pending.text, pending.language)
+    }
+
+    fun grantHDPlays(via: String) {
+        isWatchingAd = false
+        viewModel.hdCredits.grantAdReward()
+        AnalyticsManager.logHdPlaysGranted(via)
+        finishHDGrant()
+    }
+
+    // No video could be shown. The first time today counts as a reward;
+    // after that the pending phrase plays with the basic voice instead.
+    fun grantWithoutAd(via: String) {
+        val credits = viewModel.hdCredits
+        if (credits.canGrantWithoutAd) {
+            credits.recordGrantWithoutAd()
+            grantHDPlays(via)
+            return
+        }
+        isWatchingAd = false
+        val total = credits.recordBlockedGrant()
+        AnalyticsManager.logHdGrantBlocked(via, total)
+        pendingPlay?.let { pending ->
+            pendingPlay = null
+            viewModel.speakText(pending.text, pending.language, basicVoice = true)
+        }
+        showNoVideo = true
+    }
+
+    // Waits up to 3s for the ad to load. A no-fill or present failure grants
+    // the plays anyway, but only once a day (HDVoiceCredits.NO_AD_GRANTS_PER_DAY).
+    fun watchAdForHDPlays() {
+        if (isWatchingAd) return
+        isWatchingAd = true
+        scope.launch {
+            var waitedMs = 0L
+            while (!rewardedAd.isReady.value && waitedMs < 3000) {
+                delay(250)
+                waitedMs += 250
+            }
+            var earned = false
+            val shown = activity != null && rewardedAd.show(
+                activity,
+                onReward = {
+                    earned = true
+                    viewModel.hdCredits.grantAdReward()
+                    AnalyticsManager.logHdPlaysGranted("rewarded_ad")
+                },
+                onDismiss = {
+                    isWatchingAd = false
+                    if (earned) finishHDGrant() else pendingPlay = null
+                },
+                onPresentFailure = { grantWithoutAd("present_failed") }
+            )
+            if (!shown) grantWithoutAd("no_fill")
+        }
+    }
+
+    fun hdChipTapped() {
+        if (hdPlaysLeft == 0) watchAdForHDPlays() else showHDInfo = true
+    }
+
+    if (showOutOfHDPrompt) {
+        AlertDialog(
+            onDismissRequest = {
+                showOutOfHDPrompt = false
+                pendingPlay = null
+            },
+            title = { Text("Out of HD voice plays") },
+            text = {
+                Text("Hear it in a natural AI voice: watch one short video for ${HDVoiceCredits.PLAYS_PER_AD} more plays. ${HDVoiceCredits.FREE_PLAYS_PER_DAY} free plays come back every day.\n\nGade yon ti videyo pou ${HDVoiceCredits.PLAYS_PER_AD} lòt lekti ak vwa HD.")
+            },
+            confirmButton = {
+                Column(horizontalAlignment = Alignment.End) {
+                    TextButton(onClick = {
+                        showOutOfHDPrompt = false
+                        watchAdForHDPlays()
+                    }) { Text("Watch Video — ${HDVoiceCredits.PLAYS_PER_AD} HD Plays") }
+                    TextButton(onClick = {
+                        showOutOfHDPrompt = false
+                        playPendingWithBasicVoice()
+                    }) { Text("Play Basic Voice") }
+                    TextButton(onClick = {
+                        showOutOfHDPrompt = false
+                        pendingPlay = null
+                    }) { Text("Not Now") }
+                }
+            }
+        )
+    }
+
+    if (showHDInfo) {
+        AlertDialog(
+            onDismissRequest = { showHDInfo = false },
+            title = { Text("HD Voice") },
+            text = {
+                Text("$hdPlaysLeft HD plays left. You get ${HDVoiceCredits.FREE_PLAYS_PER_DAY} free every day — watch a short video anytime for ${HDVoiceCredits.PLAYS_PER_AD} more.\n\nOu gen $hdPlaysLeft lekti HD ki rete. Gade yon ti videyo pou ${HDVoiceCredits.PLAYS_PER_AD} lòt.")
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showHDInfo = false
+                    watchAdForHDPlays()
+                }) { Text("Watch Video") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showHDInfo = false }) { Text("OK") }
+            }
+        )
+    }
+
+    if (showHDGranted) {
+        AlertDialog(
+            onDismissRequest = { showHDGranted = false },
+            title = { Text("HD Plays Added") },
+            text = { Text("${HDVoiceCredits.PLAYS_PER_AD} more HD voice plays are ready.\n\n${HDVoiceCredits.PLAYS_PER_AD} lòt lekti HD pare.") },
+            confirmButton = { TextButton(onClick = { showHDGranted = false }) { Text("OK") } }
+        )
+    }
+
+    if (showNoVideo) {
+        AlertDialog(
+            onDismissRequest = { showNoVideo = false },
+            title = { Text("No Video Available") },
+            text = { Text("We couldn't load a video. The basic voice works in the meantime — check your connection and try again for ${HDVoiceCredits.PLAYS_PER_AD} HD plays.\n\nNou pa t ka chaje videyo a. Tcheke koneksyon ou epi eseye ankò.") },
+            confirmButton = { TextButton(onClick = { showNoVideo = false }) { Text("OK") } }
+        )
+    }
 
     Scaffold(
         topBar = {
@@ -142,8 +328,10 @@ fun MainScreen(viewModel: MainViewModel) {
                     label = direction.sourceLabel,
                     flag = direction.sourceFlag,
                     text = if (isProcessing && transcription.isBlank()) null else transcription,
-                    onSpeak = { viewModel.speakText(transcription, direction.sourceLanguage) },
+                    onSpeak = { playCard(transcription, direction.sourceLanguage) },
                     isSpeaking = isSpeaking,
+                    hdPlaysLeft = if (usesHDVoice(direction.sourceLanguage)) hdPlaysLeft else null,
+                    onHDChip = { hdChipTapped() },
                     feedback = if (isVoiceResult && currentSampleId != null && !isProcessing) FeedbackState(
                         given = sttFeedbackGiven,
                         onUp = { viewModel.rateTranscription(FeedbackRating.UP) },
@@ -164,8 +352,10 @@ fun MainScreen(viewModel: MainViewModel) {
                     label = direction.targetLabel,
                     flag = direction.targetFlag,
                     text = if (isProcessing && translation.isBlank()) null else translation,
-                    onSpeak = { viewModel.speakText(translation, direction.targetLanguage) },
+                    onSpeak = { playCard(translation, direction.targetLanguage) },
                     isSpeaking = isSpeaking,
+                    hdPlaysLeft = if (usesHDVoice(direction.targetLanguage)) hdPlaysLeft else null,
+                    onHDChip = { hdChipTapped() },
                     feedback = if (currentSampleId != null && !isProcessing) FeedbackState(
                         given = feedbackGiven,
                         onUp = { viewModel.rateTranslation(FeedbackRating.UP) },
@@ -210,7 +400,7 @@ private fun AppHeader(
         modifier = Modifier
             .fillMaxWidth()
             .background(
-                Brush.horizontalGradient(listOf(BrandPurple, BrandPink))
+                Brush.horizontalGradient(listOf(BrandPurple, HeaderPink))
             )
             .statusBarsPadding()
             .padding(horizontal = 8.dp, vertical = 10.dp),
@@ -253,7 +443,8 @@ private fun AppHeader(
             Text(
                 text = "Haitian Creole \u2194 English",
                 fontSize = 11.sp,
-                color = Color.White.copy(alpha = 0.85f),
+                fontWeight = FontWeight.Medium,
+                color = Color.White,
                 maxLines = 1
             )
         }
@@ -352,7 +543,7 @@ private fun TextInputSection(
             enabled = text.trim().isNotEmpty() && !isProcessing,
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(12.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = BrandPurple)
+            colors = ButtonDefaults.buttonColors(containerColor = BrandPurple, contentColor = Color.White)
         ) {
             Icon(Icons.Default.Translate, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(8.dp))
@@ -406,7 +597,7 @@ private fun DirectionIndicator(direction: TranslationDirection) {
             Text(
                 text = "  \u2192  ",
                 fontSize = 18.sp,
-                color = BrandPurple
+                color = appPalette.accent
             )
             Text(
                 text = "${direction.targetFlag} ${direction.targetLabel}",
@@ -424,7 +615,7 @@ private fun RecordButton(
     onClick: () -> Unit
 ) {
     val buttonColor = when {
-        isRecording -> RecordingRed
+        isRecording -> appPalette.recordingRed
         isProcessing -> MaterialTheme.colorScheme.surfaceVariant
         else -> BrandPurple
     }
@@ -461,7 +652,7 @@ private fun RecordButton(
                 else -> "Tap to record"
             },
             fontSize = 13.sp,
-            color = if (isRecording) RecordingRed else MaterialTheme.colorScheme.onSurfaceVariant
+            color = if (isRecording) appPalette.errorText else appPalette.secondaryText
         )
     }
 }
@@ -475,7 +666,7 @@ private fun RecordButton(
 private fun RecordingProgress(elapsedMs: Long) {
     val isLong = elapsedMs >= AudioRecorder.WARN_AFTER_MS
     val remaining = ((AudioRecorder.MAX_DURATION_MS - elapsedMs).coerceAtLeast(0L) + 999) / 1000
-    val color = if (isLong) WarningOrange else RecordingRed
+    val color = if (isLong) appPalette.warningText else appPalette.errorText
 
     Surface(
         shape = RoundedCornerShape(10.dp),
@@ -493,7 +684,7 @@ private fun RecordingProgress(elapsedMs: Long) {
                 modifier = Modifier.fillMaxWidth()
             )
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                val textColor = if (isLong) WarningOrange else MaterialTheme.colorScheme.onSurfaceVariant
+                val textColor = if (isLong) appPalette.warningText else appPalette.secondaryText
                 Text(
                     if (isLong) "Shorter phrases translate best" else "Speak one or two sentences",
                     fontSize = 12.sp,
@@ -566,6 +757,9 @@ private fun ResultCard(
     text: String?,
     onSpeak: () -> Unit,
     isSpeaking: Boolean,
+    // HD voice plays left (null = system voice selected, no chip).
+    hdPlaysLeft: Int? = null,
+    onHDChip: () -> Unit = {},
     feedback: FeedbackState? = null
 ) {
     Surface(
@@ -586,8 +780,12 @@ private fun ResultCard(
                     text = "$flag $label",
                     fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold,
-                    color = BrandPurple
+                    color = appPalette.accent
                 )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                if (text != null && text.isNotBlank() && hdPlaysLeft != null) {
+                    HDPlaysChip(playsLeft = hdPlaysLeft, onClick = onHDChip)
+                }
                 IconButton(
                     onClick = onSpeak,
                     enabled = text != null && text.isNotBlank()
@@ -595,9 +793,10 @@ private fun ResultCard(
                     Icon(
                         if (isSpeaking) Icons.Default.VolumeOff else Icons.Default.VolumeUp,
                         contentDescription = "Speak",
-                        tint = if (text != null && text.isNotBlank()) BrandPurple
-                               else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
+                        tint = if (text != null && text.isNotBlank()) appPalette.accent
+                               else appPalette.secondaryText
                     )
+                }
                 }
             }
             HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
@@ -623,23 +822,23 @@ private fun ResultCard(
                                 FeedbackRating.DOWN -> "Mèsi, n ap gade l. / Thanks, we'll review it."
                                 null -> "Bon? / Good?"
                             },
-                            fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                            fontSize = 13.sp,
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                         IconButton(onClick = feedback.onUp, enabled = given == null) {
                             Icon(
                                 Icons.Default.ThumbUp,
                                 contentDescription = "Good translation",
-                                tint = if (given == FeedbackRating.UP) BrandPurple
-                                       else MaterialTheme.colorScheme.onSurface.copy(alpha = if (given == null) 0.6f else 0.25f)
+                                tint = if (given == null || given == FeedbackRating.UP) appPalette.accent
+                                       else appPalette.secondaryText
                             )
                         }
                         IconButton(onClick = feedback.onDown, enabled = given == null) {
                             Icon(
                                 Icons.Default.ThumbDown,
                                 contentDescription = "Bad translation",
-                                tint = if (given == FeedbackRating.DOWN) BrandPink
-                                       else MaterialTheme.colorScheme.onSurface.copy(alpha = if (given == null) 0.6f else 0.25f)
+                                tint = if (given == null || given == FeedbackRating.DOWN) appPalette.accent
+                                       else appPalette.secondaryText
                             )
                         }
                     }
@@ -649,11 +848,50 @@ private fun ResultCard(
     }
 }
 
+private data class PendingPlay(val text: String, val language: String)
+
+/**
+ * Sits beside a card's speaker button: "✨ HD 3" while plays remain, then
+ * "▶ +10 HD" — a tap that offers the rewarded video. Mirrors iOS HDPlaysChip.
+ */
+@Composable
+private fun HDPlaysChip(playsLeft: Int, onClick: () -> Unit) {
+    val hasPlays = playsLeft > 0
+    val label = if (hasPlays) "$playsLeft HD voice plays left"
+                else "Out of HD voice plays. Watch a short video for ${HDVoiceCredits.PLAYS_PER_AD} more"
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(50),
+        color = if (hasPlays) appPalette.accent.copy(alpha = 0.12f) else WarningOrange,
+        modifier = Modifier.clearAndSetSemantics { contentDescription = label }
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            val fg = if (hasPlays) appPalette.accent else Color.Black
+            Icon(
+                if (hasPlays) Icons.Default.AutoAwesome else Icons.Default.SmartDisplay,
+                contentDescription = null,
+                tint = fg,
+                modifier = Modifier.size(14.dp)
+            )
+            Text(
+                if (hasPlays) "HD $playsLeft" else "+${HDVoiceCredits.PLAYS_PER_AD} HD",
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = fg
+            )
+        }
+    }
+}
+
 @Composable
 private fun ProcessingCard() {
     Surface(
         shape = RoundedCornerShape(12.dp),
-        color = BrandPurple.copy(alpha = 0.08f),
+        color = appPalette.accent.copy(alpha = 0.08f),
         modifier = Modifier.fillMaxWidth()
     ) {
         Row(
@@ -665,7 +903,7 @@ private fun ProcessingCard() {
             Text(
                 "Transcribing and translating...",
                 fontSize = 14.sp,
-                color = BrandPurple
+                color = appPalette.accent
             )
         }
     }

@@ -138,6 +138,31 @@ object AnalyticsManager {
         logEvent("premium_voices_unlocked", p)
     }
 
+    // --- HD voice plays — same event names/params as iOS ---
+    fun logHdVoiceOutPrompt(language: String) {
+        logEvent("hd_voice_out_prompt", Bundle().apply { putString("language", language) })
+    }
+
+    fun logHdVoiceBasicChosen(language: String) {
+        logEvent("hd_voice_basic_chosen", Bundle().apply { putString("language", language) })
+    }
+
+    fun logHdVoiceOutBasicFallback(language: String) {
+        logEvent("hd_voice_out_basic_fallback", Bundle().apply { putString("language", language) })
+    }
+
+    /** via: rewarded_ad, no_fill, present_failed */
+    fun logHdPlaysGranted(via: String) {
+        logEvent("hd_plays_granted", Bundle().apply { putString("via", via) })
+    }
+
+    fun logHdGrantBlocked(via: String, total: Int) {
+        logEvent("hd_grant_blocked", Bundle().apply {
+            putString("via", via)
+            putInt("total", total)
+        })
+    }
+
     // --- Review prompt ---
     fun logReviewRequested(version: String) {
         logEvent("review_requested", Bundle().apply { putString("version", version) })

@@ -140,10 +140,10 @@ class MainActivity : ComponentActivity() {
                         AppDisabledScreen(disabledMessage)
                     } else {
                         when (currentScreen) {
-                            Screen.MAIN -> MainScreen(viewModel)
+                            Screen.MAIN -> MainScreen(viewModel, rewardedAdManager)
                             Screen.HISTORY -> HistoryScreen(viewModel)
                             Screen.PHRASEBOOK -> PhrasebookScreen(viewModel)
-                            Screen.SETTINGS -> SettingsScreen(viewModel, rewardedAdManager)
+                            Screen.SETTINGS -> SettingsScreen(viewModel)
                         }
                     }
                 }
@@ -182,6 +182,8 @@ class MainActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
         interstitialAdManager.appForegrounded()
+        // A new day's free HD voice plays show up without relaunching.
+        viewModel.hdCredits.refresh()
     }
 
     override fun onStop() {
