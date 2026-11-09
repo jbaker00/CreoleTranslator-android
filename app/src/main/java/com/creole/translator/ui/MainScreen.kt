@@ -1,5 +1,7 @@
 package com.creole.translator.ui
 
+import com.creole.translator.ui.theme.appPalette
+import com.creole.translator.ui.theme.HeaderPink
 import android.app.Activity
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
@@ -398,7 +400,7 @@ private fun AppHeader(
         modifier = Modifier
             .fillMaxWidth()
             .background(
-                Brush.horizontalGradient(listOf(BrandPurple, BrandPink))
+                Brush.horizontalGradient(listOf(BrandPurple, HeaderPink))
             )
             .statusBarsPadding()
             .padding(horizontal = 8.dp, vertical = 10.dp),
@@ -441,7 +443,8 @@ private fun AppHeader(
             Text(
                 text = "Haitian Creole \u2194 English",
                 fontSize = 11.sp,
-                color = Color.White.copy(alpha = 0.85f),
+                fontWeight = FontWeight.Medium,
+                color = Color.White,
                 maxLines = 1
             )
         }
@@ -540,7 +543,7 @@ private fun TextInputSection(
             enabled = text.trim().isNotEmpty() && !isProcessing,
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(12.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = BrandPurple)
+            colors = ButtonDefaults.buttonColors(containerColor = BrandPurple, contentColor = Color.White)
         ) {
             Icon(Icons.Default.Translate, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(8.dp))
@@ -594,7 +597,7 @@ private fun DirectionIndicator(direction: TranslationDirection) {
             Text(
                 text = "  \u2192  ",
                 fontSize = 18.sp,
-                color = BrandPurple
+                color = appPalette.accent
             )
             Text(
                 text = "${direction.targetFlag} ${direction.targetLabel}",
@@ -612,7 +615,7 @@ private fun RecordButton(
     onClick: () -> Unit
 ) {
     val buttonColor = when {
-        isRecording -> RecordingRed
+        isRecording -> appPalette.recordingRed
         isProcessing -> MaterialTheme.colorScheme.surfaceVariant
         else -> BrandPurple
     }
@@ -649,7 +652,7 @@ private fun RecordButton(
                 else -> "Tap to record"
             },
             fontSize = 13.sp,
-            color = if (isRecording) RecordingRed else MaterialTheme.colorScheme.onSurfaceVariant
+            color = if (isRecording) appPalette.errorText else appPalette.secondaryText
         )
     }
 }
@@ -663,7 +666,7 @@ private fun RecordButton(
 private fun RecordingProgress(elapsedMs: Long) {
     val isLong = elapsedMs >= AudioRecorder.WARN_AFTER_MS
     val remaining = ((AudioRecorder.MAX_DURATION_MS - elapsedMs).coerceAtLeast(0L) + 999) / 1000
-    val color = if (isLong) WarningOrange else RecordingRed
+    val color = if (isLong) appPalette.warningText else appPalette.errorText
 
     Surface(
         shape = RoundedCornerShape(10.dp),
@@ -681,7 +684,7 @@ private fun RecordingProgress(elapsedMs: Long) {
                 modifier = Modifier.fillMaxWidth()
             )
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                val textColor = if (isLong) WarningOrange else MaterialTheme.colorScheme.onSurfaceVariant
+                val textColor = if (isLong) appPalette.warningText else appPalette.secondaryText
                 Text(
                     if (isLong) "Shorter phrases translate best" else "Speak one or two sentences",
                     fontSize = 12.sp,
@@ -777,7 +780,7 @@ private fun ResultCard(
                     text = "$flag $label",
                     fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold,
-                    color = BrandPurple
+                    color = appPalette.accent
                 )
                 Row(verticalAlignment = Alignment.CenterVertically) {
                 if (text != null && text.isNotBlank() && hdPlaysLeft != null) {
@@ -790,8 +793,8 @@ private fun ResultCard(
                     Icon(
                         if (isSpeaking) Icons.Default.VolumeOff else Icons.Default.VolumeUp,
                         contentDescription = "Speak",
-                        tint = if (text != null && text.isNotBlank()) BrandPurple
-                               else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
+                        tint = if (text != null && text.isNotBlank()) appPalette.accent
+                               else appPalette.secondaryText
                     )
                 }
                 }
@@ -819,23 +822,23 @@ private fun ResultCard(
                                 FeedbackRating.DOWN -> "Mèsi, n ap gade l. / Thanks, we'll review it."
                                 null -> "Bon? / Good?"
                             },
-                            fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                            fontSize = 13.sp,
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                         IconButton(onClick = feedback.onUp, enabled = given == null) {
                             Icon(
                                 Icons.Default.ThumbUp,
                                 contentDescription = "Good translation",
-                                tint = if (given == FeedbackRating.UP) BrandPurple
-                                       else MaterialTheme.colorScheme.onSurface.copy(alpha = if (given == null) 0.6f else 0.25f)
+                                tint = if (given == null || given == FeedbackRating.UP) appPalette.accent
+                                       else appPalette.secondaryText
                             )
                         }
                         IconButton(onClick = feedback.onDown, enabled = given == null) {
                             Icon(
                                 Icons.Default.ThumbDown,
                                 contentDescription = "Bad translation",
-                                tint = if (given == FeedbackRating.DOWN) BrandPink
-                                       else MaterialTheme.colorScheme.onSurface.copy(alpha = if (given == null) 0.6f else 0.25f)
+                                tint = if (given == null || given == FeedbackRating.DOWN) appPalette.accent
+                                       else appPalette.secondaryText
                             )
                         }
                     }
@@ -859,7 +862,7 @@ private fun HDPlaysChip(playsLeft: Int, onClick: () -> Unit) {
     Surface(
         onClick = onClick,
         shape = RoundedCornerShape(50),
-        color = if (hasPlays) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f) else WarningOrange,
+        color = if (hasPlays) appPalette.accent.copy(alpha = 0.12f) else WarningOrange,
         modifier = Modifier.clearAndSetSemantics { contentDescription = label }
     ) {
         Row(
@@ -867,7 +870,7 @@ private fun HDPlaysChip(playsLeft: Int, onClick: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            val fg = if (hasPlays) MaterialTheme.colorScheme.primary else Color.Black
+            val fg = if (hasPlays) appPalette.accent else Color.Black
             Icon(
                 if (hasPlays) Icons.Default.AutoAwesome else Icons.Default.SmartDisplay,
                 contentDescription = null,
@@ -888,7 +891,7 @@ private fun HDPlaysChip(playsLeft: Int, onClick: () -> Unit) {
 private fun ProcessingCard() {
     Surface(
         shape = RoundedCornerShape(12.dp),
-        color = BrandPurple.copy(alpha = 0.08f),
+        color = appPalette.accent.copy(alpha = 0.08f),
         modifier = Modifier.fillMaxWidth()
     ) {
         Row(
@@ -900,7 +903,7 @@ private fun ProcessingCard() {
             Text(
                 "Transcribing and translating...",
                 fontSize = 14.sp,
-                color = BrandPurple
+                color = appPalette.accent
             )
         }
     }
