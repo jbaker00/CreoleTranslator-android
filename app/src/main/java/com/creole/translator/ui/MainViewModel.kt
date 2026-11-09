@@ -10,6 +10,7 @@ import androidx.lifecycle.viewModelScope
 import com.creole.translator.data.AppAvailabilityManager
 import com.creole.translator.data.AudioRecorder
 import com.creole.translator.data.GroqService
+import com.creole.translator.data.HDVoiceCredits
 import com.creole.translator.data.LanguageDetector
 import com.creole.translator.data.TextToSpeechManager
 import com.creole.translator.data.TranslationHistoryManager
@@ -43,10 +44,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val audioRecorder = AudioRecorder(application)
     private val historyManager = TranslationHistoryManager(application)
     val voiceSettings = VoiceSettings(application)
+    val hdCredits = HDVoiceCredits(application)
     val ttsManager = TextToSpeechManager(
         context = application,
         scope = viewModelScope,
-        voiceSettings = voiceSettings
+        voiceSettings = voiceSettings,
+        hdCredits = hdCredits
     )
 
     // Navigation
@@ -428,9 +431,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     // ── TTS ─────────────────────────────────────────────────────────────────
 
-    fun speakText(text: String, language: String) {
-        ttsManager.speak(text, language)
+    fun speakText(text: String, language: String, basicVoice: Boolean = false) {
+        ttsManager.speak(text, language, basicVoice)
     }
+
+    /** True when playing [text] now would use one of the user's HD plays. */
+    fun usesHDPlay(text: String, language: String): Boolean = ttsManager.usesHDPlay(text, language)
 
     fun stopSpeaking() {
         ttsManager.stopSpeaking()

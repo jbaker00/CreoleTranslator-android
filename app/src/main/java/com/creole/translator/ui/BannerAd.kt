@@ -1,14 +1,21 @@
 package com.creole.translator.ui
 
 import android.util.Log
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.creole.translator.BuildConfig
 import com.google.android.gms.ads.AdListener
@@ -24,17 +31,36 @@ private val BANNER_AD_UNIT_ID = if (BuildConfig.DEBUG) TEST_BANNER_AD_UNIT_ID el
 
 // Adaptive anchored banner — pays significantly more than fixed BANNER (320x50)
 // and respects gesture navigation insets so ads don't sit in the swipe zone.
+//
+// AdMob "Site Behavior: Navigation" (Nov 2026, flagged on v1.1 only): ads must
+// not sit where they could be mistaken for app navigation. The banner lives in
+// its own visually separate strip — divider on top, distinct background,
+// 8dp gap above the ad — so it never reads as part of the app's controls and
+// a tap aimed at content can't land on it. Mirrors iOS ContentView's banner
+// (Divider overlay + tertiarySystemBackground).
 @Composable
 fun BannerAd(modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .windowInsetsPadding(WindowInsets.navigationBars)
+    ) {
+        HorizontalDivider()
+        Spacer(Modifier.height(8.dp))
+        AdaptiveBanner()
+    }
+}
+
+@Composable
+private fun AdaptiveBanner() {
     val context = LocalContext.current
     val configuration = LocalConfiguration.current
     // Width in dp for adaptive sizing (screen width minus window insets is handled by scaffold)
     val screenWidthDp = configuration.screenWidthDp
 
     AndroidView(
-        modifier = modifier
-            .fillMaxWidth()
-            .windowInsetsPadding(WindowInsets.navigationBars),
+        modifier = Modifier.fillMaxWidth(),
         factory = { ctx ->
             AdView(ctx).apply {
                 val adaptiveSize = AdSize.getCurrentOrientationAnchoredAdaptiveBannerAdSize(

@@ -14,7 +14,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
-// Rewarded ad shown to unlock premium AI voices for 24 hours (see VoiceSettings).
+// Rewarded ad that grants HD voice plays (see data/HDVoiceCredits.kt).
 // Mirrors iOS RewardedAdManager.swift.
 class RewardedAdManager(private val context: Context) {
 

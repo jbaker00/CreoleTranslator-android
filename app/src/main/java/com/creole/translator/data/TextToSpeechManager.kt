@@ -28,7 +28,8 @@ import java.util.concurrent.TimeUnit
 class TextToSpeechManager(
     private val context: Context,
     private val scope: CoroutineScope,
-    private val voiceSettings: VoiceSettings
+    private val voiceSettings: VoiceSettings,
+    private val hdCredits: HDVoiceCredits
 ) {
 
     companion object {
@@ -68,43 +69,87 @@ class TextToSpeechManager(
         }
     }
 
-    fun speak(text: String, language: String) {
+    // Last HD clip, so replaying it costs neither a request nor an HD play.
+    private var lastHDAudio: Pair<String, ByteArray>? = null
+    private var requestId = 0L
+
+    private data class HDRequest(val voice: String, val speed: Double, val key: String)
+
+    /** [basicVoice] forces the on-device voice (chosen when out of HD plays). */
+    fun speak(text: String, language: String, basicVoice: Boolean = false) {
         if (text.isBlank()) return
         stopSpeaking()
         _lastError.value = null
 
-        val isCreole = language == "ht"
-        val provider = if (isCreole) voiceSettings.creoleProvider.value else voiceSettings.englishProvider.value
-        val speed = if (isCreole) voiceSettings.creolePlaybackSpeed.value else voiceSettings.englishPlaybackSpeed.value
-
-        when (provider) {
-            TTSProvider.OPENAI, TTSProvider.GROQ -> {
-                // GROQ treated as OPENAI (migration compat — Groq TTS removed)
-                val voice = if (isCreole) voiceSettings.openAIVoice.value else voiceSettings.englishOpenAIVoice.value
-                speakWithOpenAI(text, voice, speed, language)
-            }
-            TTSProvider.SYSTEM -> speakWithAndroid(text, language, speed)
+        val speed = playbackSpeed(language)
+        val hd = if (basicVoice) null else hdRequest(text, language)
+        if (hd == null) {
+            speakWithAndroid(text, language, speed)
+            return
         }
-    }
 
-    private fun speakWithOpenAI(text: String, voice: String, speed: Double, language: String) {
+        // Replaying the clip just heard is free: no request, no HD play used.
+        lastHDAudio?.let { (key, data) ->
+            if (key == hd.key) {
+                _isSpeaking.value = true
+                scope.launch { playAudioData(data, "tts_output.mp3", 1.0) }
+                return
+            }
+        }
+
+        // Callers that don't prompt first (History, Phrasebook, Settings test)
+        // land here when the user is out of HD plays.
+        if (hdCredits.playsLeft.value <= 0) {
+            AnalyticsManager.logHdVoiceOutBasicFallback(language)
+            speakWithAndroid(text, language, speed)
+            return
+        }
+
+        val id = ++requestId
+        _isSpeaking.value = true
         scope.launch {
-            _isSpeaking.value = true
             try {
                 // Speed is applied by the TTS API itself, so playback rate stays at 1.0
-                val audioData = synthesizeWithOpenAI(text, voice, speed, language)
+                val audioData = synthesizeWithOpenAI(text, hd.voice, hd.speed, language)
+                // stopSpeaking() or a newer speak() superseded this request.
+                if (requestId != id || !_isSpeaking.value) return@launch
+                lastHDAudio = hd.key to audioData
+                hdCredits.consume()
                 playAudioData(audioData, "tts_output.mp3", 1.0)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
+                if (requestId != id || !_isSpeaking.value) return@launch
                 _lastError.value = "OpenAI TTS failed: ${e.message}"
                 val message = e.message ?: "unknown"
                 val lowerMessage = message.lowercase()
                 if (lowerMessage.contains("insufficient_quota") || lowerMessage.contains("exceeded your current quota")) {
-                    AnalyticsManager.logTtsQuotaExceeded(voice, text.length)
+                    AnalyticsManager.logTtsQuotaExceeded(hd.voice, text.length)
                 }
                 AnalyticsManager.logTtsFallback("openai", language, message)
                 speakWithAndroid(text, language, speed)
             }
         }
+    }
+
+    /** True when playing [text] now would use one of the user's HD plays. */
+    fun usesHDPlay(text: String, language: String): Boolean {
+        val hd = hdRequest(text, language) ?: return false
+        return lastHDAudio?.first != hd.key
+    }
+
+    private fun playbackSpeed(language: String): Double =
+        if (language == "ht") voiceSettings.creolePlaybackSpeed.value else voiceSettings.englishPlaybackSpeed.value
+
+    /** The AI voice request for [text], or null when the system voice is selected. */
+    private fun hdRequest(text: String, language: String): HDRequest? {
+        val isCreole = language == "ht"
+        val provider = if (isCreole) voiceSettings.creoleProvider.value else voiceSettings.englishProvider.value
+        // GROQ treated as OPENAI (migration compat — Groq TTS removed)
+        if (provider == TTSProvider.SYSTEM) return null
+        val voice = if (isCreole) voiceSettings.openAIVoice.value else voiceSettings.englishOpenAIVoice.value
+        val speed = playbackSpeed(language)
+        return HDRequest(voice, speed, "openai|$voice|$speed|$language|$text")
     }
 
     private suspend fun synthesizeWithOpenAI(text: String, voice: String, speed: Double, language: String): ByteArray = withContext(Dispatchers.IO) {
