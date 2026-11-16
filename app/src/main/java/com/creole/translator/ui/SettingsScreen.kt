@@ -19,6 +19,7 @@ import androidx.compose.ui.unit.dp
 import com.creole.translator.data.HDVoiceCredits
 import com.creole.translator.data.TTSProvider
 import com.creole.translator.data.VoiceSettings
+import com.creole.translator.model.Language
 import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -32,7 +33,7 @@ fun SettingsScreen(viewModel: MainViewModel) {
     val englishSpeed by viewModel.voiceSettings.englishPlaybackSpeed.collectAsState()
     val creoleSpeed by viewModel.voiceSettings.creolePlaybackSpeed.collectAsState()
     val isSpeaking by viewModel.isSpeaking.collectAsState()
-    val autoDetect by viewModel.voiceSettings.autoDetectLanguage.collectAsState()
+    val direction by viewModel.direction.collectAsState()
     val ttsError by viewModel.ttsError.collectAsState()
     val hdPlaysLeft by viewModel.hdCredits.playsLeft.collectAsState()
 
@@ -199,30 +200,28 @@ fun SettingsScreen(viewModel: MainViewModel) {
             item { HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp)) }
             item {
                 SectionHeader(
-                    title = "Translation",
-                    subtitle = "How the app decides which way to translate."
+                    title = UIText.t("Translation", "Traducción"),
+                    subtitle = UIText.t("Other language", "Otro idioma") + " · Lòt lang"
                 )
             }
             item {
-                Row(
+                // People look here first to change language, so the same choice
+                // as the main screen's pair chip is offered here too (iOS 3.7).
+                SingleChoiceSegmentedButtonRow(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                        .padding(horizontal = 16.dp, vertical = 6.dp)
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("Auto-detect language", style = MaterialTheme.typography.bodyLarge)
-                        Text(
-                            "If you type or say English while set to Creole → English (or the reverse), " +
-                                "translate the right way anyway. You can undo any flip.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                    val options = listOf(Language.ENGLISH, Language.SPANISH)
+                    options.forEachIndexed { index, language ->
+                        SegmentedButton(
+                            selected = direction.partner == language,
+                            onClick = { viewModel.choosePartner(language) },
+                            shape = SegmentedButtonDefaults.itemShape(index = index, count = options.size)
+                        ) {
+                            Text("${language.nativeName} · ${language.kreyolName}")
+                        }
                     }
-                    Switch(
-                        checked = autoDetect,
-                        onCheckedChange = { viewModel.voiceSettings.setAutoDetectLanguage(it) }
-                    )
                 }
             }
 
@@ -247,7 +246,11 @@ fun SettingsScreen(viewModel: MainViewModel) {
             }
             item {
                 Text(
-                    "Your speech is sent to OpenAI (Haitian Creole) or Groq (English) for transcription, with the other as a backup; text is translated by Groq, and translated text is sent to OpenAI or Groq to generate spoken audio. Translated text (never linked to you) is kept for up to 90 days so Creole speakers can review quality; voice recordings are kept only when a translation is flagged, for up to 30 days. Items you flag with 👎 may be shown to reviewers right away; everything else is shown only once it is 10 days old. See our Privacy Policy for details and how to request deletion.",
+                    UIText.t(
+                        "Your speech is sent to OpenAI for transcription, with Groq as a backup; text is translated by OpenAI through OpenRouter, with Groq as a backup, and translated text is sent to OpenAI or Groq to generate spoken audio. Translated text (never linked to you) is kept for up to 90 days so Creole speakers can review quality; voice recordings are kept only when a translation is flagged, for up to 30 days. Items you flag with 👎 may be shown to reviewers right away; everything else is shown only once it is 10 days old. See our Privacy Policy for details and how to request deletion.",
+                        "Tu voz se envía a OpenAI para transcribirla, con Groq como respaldo; OpenAI traduce el texto a través de OpenRouter, con Groq como respaldo, y el texto traducido se envía a OpenAI o a Groq para generar el audio. El texto traducido (nunca vinculado a ti) se guarda hasta 90 días para que hablantes de criollo revisen la calidad; las grabaciones de voz solo se guardan cuando una traducción se marca como incorrecta, hasta 30 días. Lo que marcas con 👎 puede mostrarse a los revisores de inmediato; lo demás, solo cuando tiene 10 días. Consulta nuestra Política de privacidad para más detalles y para solicitar que se elimine."
+                    ),
+
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)

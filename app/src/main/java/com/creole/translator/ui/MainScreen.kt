@@ -1,41 +1,60 @@
 package com.creole.translator.ui
 
-import com.creole.translator.ui.theme.appPalette
-import com.creole.translator.ui.theme.HeaderPink
 import android.app.Activity
-import androidx.compose.animation.animateContentSize
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.ThumbDown
+import androidx.compose.material.icons.outlined.ThumbUp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.creole.translator.data.AnalyticsManager
 import com.creole.translator.data.AudioRecorder
 import com.creole.translator.data.HDVoiceCredits
-import com.creole.translator.data.TTSProvider
 import com.creole.translator.model.FeedbackRating
-import com.creole.translator.model.TranslationDirection
-import com.creole.translator.ui.theme.BrandPink
-import com.creole.translator.ui.theme.BrandPurple
-import com.creole.translator.ui.theme.RecordingRed
+import com.creole.translator.model.Language
+import com.creole.translator.model.TranslationSource
 import com.creole.translator.ui.theme.WarningOrange
+import com.creole.translator.ui.theme.appPalette
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -46,8 +65,7 @@ fun MainScreen(viewModel: MainViewModel, rewardedAd: RewardedAdManager) {
     val recordingElapsedMs by viewModel.recordingElapsedMs.collectAsState()
     val isProcessing by viewModel.isProcessing.collectAsState()
     val direction by viewModel.direction.collectAsState()
-    val transcription by viewModel.transcription.collectAsState()
-    val translation by viewModel.translation.collectAsState()
+    val turns by viewModel.turns.collectAsState()
     val statusMessage by viewModel.statusMessage.collectAsState()
     val errorMessage by viewModel.errorMessage.collectAsState()
     val isSpeaking by viewModel.isSpeaking.collectAsState()
@@ -57,16 +75,18 @@ fun MainScreen(viewModel: MainViewModel, rewardedAd: RewardedAdManager) {
     val typedInput by viewModel.typedInput.collectAsState()
     val currentSampleId by viewModel.currentSampleId.collectAsState()
     val feedbackGiven by viewModel.feedbackGiven.collectAsState()
-    val sttFeedbackGiven by viewModel.sttFeedbackGiven.collectAsState()
-    val isVoiceResult by viewModel.isVoiceResult.collectAsState()
-    val autoDetectOverrode by viewModel.autoDetectOverrode.collectAsState()
+    val suggestedPartner by viewModel.suggestedPartner.collectAsState()
+    val showWhatsNew by viewModel.showWhatsNew.collectAsState()
     var showCommentDialog by remember { mutableStateOf(false) }
-    var showSttCommentDialog by remember { mutableStateOf(false) }
+    // Bubble whose Listen is playing, so only that one shows a stop icon.
+    var speakingCard by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(isSpeaking) { if (!isSpeaking) speakingCard = null }
 
     // ── HD voice plays (mirrors iOS ContentView playCard/watchAdForHDPlays) ──
     val hdPlaysLeft by viewModel.hdCredits.playsLeft.collectAsState()
     val englishProvider by viewModel.voiceSettings.englishProvider.collectAsState()
     val creoleProvider by viewModel.voiceSettings.creoleProvider.collectAsState()
+    val spanishProvider by viewModel.voiceSettings.spanishProvider.collectAsState()
     val activity = LocalContext.current as? Activity
     val scope = rememberCoroutineScope()
     // Card tapped while out of HD plays; played after the ad (or with the basic voice).
@@ -79,21 +99,24 @@ fun MainScreen(viewModel: MainViewModel, rewardedAd: RewardedAdManager) {
 
     LaunchedEffect(Unit) { rewardedAd.preload() }
 
-    fun usesHDVoice(language: String) =
-        (if (language == "ht") creoleProvider else englishProvider) != TTSProvider.SYSTEM
+    // Read so a provider change in Settings recomposes the HD chips.
+    @Suppress("UNUSED_VARIABLE") val providers = Triple(englishProvider, creoleProvider, spanishProvider)
+    fun usesHDVoice(language: String) = viewModel.voiceSettings.usesHDVoice(language)
 
-    fun playCard(text: String, language: String) {
+    fun playCard(card: String, text: String, language: String) {
         if (isSpeaking) {
             viewModel.stopSpeaking()
+            speakingCard = null
             return
         }
         if (hdPlaysLeft == 0 && viewModel.usesHDPlay(text, language)) {
             if (isWatchingAd) return
-            pendingPlay = PendingPlay(text, language)
+            pendingPlay = PendingPlay(card, text, language)
             showOutOfHDPrompt = true
             AnalyticsManager.logHdVoiceOutPrompt(language)
             return
         }
+        speakingCard = card
         viewModel.speakText(text, language)
     }
 
@@ -101,6 +124,7 @@ fun MainScreen(viewModel: MainViewModel, rewardedAd: RewardedAdManager) {
         val pending = pendingPlay ?: return
         pendingPlay = null
         AnalyticsManager.logHdVoiceBasicChosen(pending.language)
+        speakingCard = pending.card
         viewModel.speakText(pending.text, pending.language, basicVoice = true)
     }
 
@@ -112,6 +136,7 @@ fun MainScreen(viewModel: MainViewModel, rewardedAd: RewardedAdManager) {
             return
         }
         pendingPlay = null
+        speakingCard = pending.card
         viewModel.speakText(pending.text, pending.language)
     }
 
@@ -136,6 +161,7 @@ fun MainScreen(viewModel: MainViewModel, rewardedAd: RewardedAdManager) {
         AnalyticsManager.logHdGrantBlocked(via, total)
         pendingPlay?.let { pending ->
             pendingPlay = null
+            speakingCard = pending.card
             viewModel.speakText(pending.text, pending.language, basicVoice = true)
         }
         showNoVideo = true
@@ -240,6 +266,60 @@ fun MainScreen(viewModel: MainViewModel, rewardedAd: RewardedAdManager) {
         )
     }
 
+    if (showCommentDialog) {
+        FeedbackCommentDialog(
+            onSend = { comment ->
+                showCommentDialog = false
+                viewModel.rateTranslation(FeedbackRating.DOWN, comment)
+            },
+            onDismiss = { showCommentDialog = false }
+        )
+    }
+
+    val partner = direction.partner
+    val prompt = speakPrompt(partner, isRecording, isProcessing)
+    val focusRequester = remember { FocusRequester() }
+    val focusManager = LocalFocusManager.current
+    val keyboard = LocalSoftwareKeyboardController.current
+    val view = LocalView.current
+
+    fun switchToTyping() {
+        viewModel.setInputMode(InputMode.TEXT)
+    }
+    fun send() {
+        focusManager.clearFocus()
+        keyboard?.hide()
+        viewModel.submitTypedText()
+    }
+
+    // Spoken results are announced, as on iOS (UIAccessibility announcement).
+    val lastTurn = turns.lastOrNull()
+    LaunchedEffect(lastTurn?.id) {
+        if (lastTurn != null && lastTurn.input == TranslationSource.VOICE) {
+            @Suppress("DEPRECATION")
+            view.announceForAccessibility("${lastTurn.direction.target.nativeName}: ${lastTurn.translation}")
+        }
+    }
+
+    val notices: @Composable () -> Unit = {
+        Notices(
+            suggestedPartner = if (isProcessing) null else suggestedPartner,
+            onAcceptSuggestion = { viewModel.acceptSuggestedPartner() },
+            statusMessage = statusMessage,
+            onDismissStatus = { viewModel.clearStatus() },
+            errorMessage = errorMessage,
+            ttsError = ttsError,
+            onDismissError = { viewModel.clearError() }
+        )
+    }
+    val pairChip: @Composable () -> Unit = {
+        PairChip(
+            partner = partner,
+            enabled = !isProcessing && !isRecording,
+            onChoose = { viewModel.choosePartner(it) }
+        )
+    }
+
     Scaffold(
         topBar = {
             AppHeader(
@@ -256,139 +336,124 @@ fun MainScreen(viewModel: MainViewModel, rewardedAd: RewardedAdManager) {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+                .imePadding()
         ) {
-            // Direction indicator
-            DirectionIndicator(direction)
-
-            // Auto-detect flipped the direction for this translation — say so, offer Undo.
-            autoDetectOverrode?.let { manual ->
-                AutoDetectChip(
-                    detected = direction,
-                    onUndo = { viewModel.undoAutoDetect() },
-                    enabled = !isProcessing
+            if (turns.isEmpty() && inputMode == InputMode.VOICE) {
+                // First screen: one mic and one sentence saying what to do, in both languages.
+                HeroScreen(
+                    pairChip = pairChip,
+                    notices = notices,
+                    whatsNew = if (showWhatsNew && !isRecording && !isProcessing) {
+                        { WhatsNewCard(onDismiss = { viewModel.dismissWhatsNew() }) }
+                    } else null,
+                    mic = {
+                        MicButton(
+                            size = 132.dp,
+                            isRecording = isRecording,
+                            isProcessing = isProcessing,
+                            contentDescription = "${prompt.first}. ${prompt.second}",
+                            onClick = { viewModel.toggleRecording() }
+                        )
+                    },
+                    prompt = prompt,
+                    recording = if (isRecording) { { RecordingProgress(elapsedMs = recordingElapsedMs) } } else null,
+                    typeLabel = "Ekri · " + UIText.pair(partner, "Type instead", "Escribir"),
+                    typeEnabled = !isProcessing && !isRecording,
+                    typeVisible = !isRecording,
+                    onType = { switchToTyping() }
                 )
-            }
-
-            // Voice / Text input mode picker
-            InputModePicker(
-                inputMode = inputMode,
-                enabled = !isRecording && !isProcessing,
-                onModeChange = { viewModel.setInputMode(it) }
-            )
-
-            // Input control — record button or text field
-            if (inputMode == InputMode.VOICE) {
-                RecordButton(
-                    isRecording = isRecording,
-                    isProcessing = isProcessing,
-                    onClick = { viewModel.toggleRecording() }
-                )
-                if (isRecording) {
-                    RecordingProgress(elapsedMs = recordingElapsedMs)
-                }
             } else {
-                TextInputSection(
-                    text = typedInput,
-                    direction = direction,
-                    isProcessing = isProcessing,
-                    onTextChange = { viewModel.setTypedInput(it) },
-                    onTranslate = { viewModel.submitTypedText() }
-                )
-            }
-
-            // Status / error messages
-            statusMessage?.let { msg ->
-                StatusCard(message = msg, isError = false) {
-                    viewModel.clearStatus()
+                val listState = rememberLazyListState()
+                // The newest bubble is always brought into view.
+                LaunchedEffect(turns.size, isProcessing, inputMode) {
+                    val count = listState.layoutInfo.totalItemsCount
+                    if (count > 0) listState.animateScrollToItem(count - 1)
+                }
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    item { pairChip() }
+                    items(turns, key = { it.id }) { turn ->
+                        val latest = turn.id == turns.last().id
+                        val target = turn.direction.target
+                        Bubble(
+                            turn = turn,
+                            latest = latest,
+                            speaking = isSpeaking && speakingCard == turn.id,
+                            onListen = { playCard(turn.id, turn.translation, target.code) },
+                            hdPlaysLeft = if (usesHDVoice(target.code)) hdPlaysLeft else null,
+                            onHDChip = { hdChipTapped() },
+                            feedback = if (latest && turn.sampleId != null && turn.sampleId == currentSampleId) FeedbackState(
+                                given = feedbackGiven,
+                                onUp = { viewModel.rateTranslation(FeedbackRating.UP) },
+                                onDown = { showCommentDialog = true }
+                            ) else null,
+                            onOtherWay = { viewModel.translateLastOtherWay() },
+                            otherWayEnabled = !isProcessing,
+                            partner = partner
+                        )
+                    }
+                    if (isProcessing) {
+                        item {
+                            Row(
+                                modifier = Modifier.heightIn(min = 44.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(18.dp), strokeWidth = 2.dp,
+                                    color = appPalette.secondaryText
+                                )
+                                Text("${prompt.first} · ${prompt.second}", fontSize = 15.sp, color = appPalette.secondaryText)
+                            }
+                        }
+                    }
+                    item { Column(verticalArrangement = Arrangement.spacedBy(10.dp)) { notices() } }
+                }
+                if (inputMode == InputMode.VOICE) {
+                    VoiceDock(
+                        isRecording = isRecording,
+                        isProcessing = isProcessing,
+                        recordingElapsedMs = recordingElapsedMs,
+                        prompt = prompt,
+                        partner = partner,
+                        onMic = { viewModel.toggleRecording() },
+                        onType = { switchToTyping() }
+                    )
+                } else {
+                    LaunchedEffect(Unit) { focusRequester.requestFocus() }
+                    TypingDock(
+                        text = typedInput,
+                        partner = partner,
+                        isProcessing = isProcessing,
+                        focusRequester = focusRequester,
+                        onTextChange = { viewModel.setTypedInput(it) },
+                        onSend = { send() },
+                        onSpeak = {
+                            focusManager.clearFocus()
+                            keyboard?.hide()
+                            viewModel.setInputMode(InputMode.VOICE)
+                        }
+                    )
                 }
             }
-            errorMessage?.let { msg ->
-                StatusCard(message = msg, isError = true) {
-                    viewModel.clearError()
-                }
-            }
-            ttsError?.let { msg ->
-                StatusCard(message = "TTS: $msg", isError = true) {
-                    viewModel.clearError()
-                }
-            }
-
-            // Processing indicator
-            if (isProcessing) {
-                ProcessingCard()
-            }
-
-            // Source result card (STT thumbs only for voice results)
-            if (transcription.isNotBlank() || isProcessing) {
-                ResultCard(
-                    label = direction.sourceLabel,
-                    flag = direction.sourceFlag,
-                    text = if (isProcessing && transcription.isBlank()) null else transcription,
-                    onSpeak = { playCard(transcription, direction.sourceLanguage) },
-                    isSpeaking = isSpeaking,
-                    hdPlaysLeft = if (usesHDVoice(direction.sourceLanguage)) hdPlaysLeft else null,
-                    onHDChip = { hdChipTapped() },
-                    feedback = if (isVoiceResult && currentSampleId != null && !isProcessing) FeedbackState(
-                        given = sttFeedbackGiven,
-                        onUp = { viewModel.rateTranscription(FeedbackRating.UP) },
-                        onDown = { showSttCommentDialog = true }
-                    ) else null
-                )
-            }
-
-            // Switch direction button (always visible)
-            SwitchDirectionButton(
-                onClick = { viewModel.switchDirection() },
-                enabled = !isRecording && !isProcessing
-            )
-
-            // Target result card
-            if (translation.isNotBlank() || (isProcessing && transcription.isNotBlank())) {
-                ResultCard(
-                    label = direction.targetLabel,
-                    flag = direction.targetFlag,
-                    text = if (isProcessing && translation.isBlank()) null else translation,
-                    onSpeak = { playCard(translation, direction.targetLanguage) },
-                    isSpeaking = isSpeaking,
-                    hdPlaysLeft = if (usesHDVoice(direction.targetLanguage)) hdPlaysLeft else null,
-                    onHDChip = { hdChipTapped() },
-                    feedback = if (currentSampleId != null && !isProcessing) FeedbackState(
-                        given = feedbackGiven,
-                        onUp = { viewModel.rateTranslation(FeedbackRating.UP) },
-                        onDown = { showCommentDialog = true }
-                    ) else null
-                )
-            }
-
-            if (showCommentDialog) {
-                FeedbackCommentDialog(
-                    onSend = { comment ->
-                        showCommentDialog = false
-                        viewModel.rateTranslation(FeedbackRating.DOWN, comment)
-                    },
-                    onDismiss = { showCommentDialog = false }
-                )
-            }
-
-            if (showSttCommentDialog) {
-                FeedbackCommentDialog(
-                    onSend = { comment ->
-                        showSttCommentDialog = false
-                        viewModel.rateTranscription(FeedbackRating.DOWN, comment)
-                    },
-                    onDismiss = { showSttCommentDialog = false }
-                )
-            }
-
-            Spacer(Modifier.height(16.dp))
         }
     }
 }
 
+/** (Kreyòl line, other-language line) for the mic, in the current state. Mirrors iOS `speakPrompt`. */
+private fun speakPrompt(partner: Language, isRecording: Boolean, isProcessing: Boolean): Pair<String, String> = when {
+    isProcessing -> "N ap tradui…" to UIText.pair(partner, "Translating…", "Traduciendo…")
+    isRecording -> "M ap koute…" to UIText.pair(partner, "Listening. Tap to stop", "Escuchando. Toca para parar")
+    else -> "Pale kreyòl oswa ${partner.kreyolName.lowercase()}" to
+        UIText.pair(partner, "Speak Kreyòl or English", "Habla kreyòl o español")
+}
+
+/** Plain bar: app name + History / Phrasebook / Settings (iOS dropped the gradient header). */
 @Composable
 private fun AppHeader(
     historyCount: Int,
@@ -399,56 +464,19 @@ private fun AppHeader(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(
-                Brush.horizontalGradient(listOf(BrandPurple, HeaderPink))
-            )
+            .background(MaterialTheme.colorScheme.background)
             .statusBarsPadding()
-            .padding(horizontal = 8.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
+            .padding(start = 16.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(0.dp)
-        ) {
-            IconButton(onClick = onSettingsClick, modifier = Modifier.size(40.dp)) {
-                Icon(
-                    Icons.Default.Settings,
-                    contentDescription = "Voice Settings",
-                    tint = Color.White,
-                    modifier = Modifier.size(22.dp)
-                )
-            }
-            IconButton(onClick = onPhrasebookClick, modifier = Modifier.size(40.dp)) {
-                Icon(
-                    Icons.Default.MenuBook,
-                    contentDescription = "Phrasebook",
-                    tint = Color.White,
-                    modifier = Modifier.size(22.dp)
-                )
-            }
-        }
-
-        Column(
-            modifier = Modifier.weight(1f).padding(horizontal = 4.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text(
-                text = "\uD83C\uDFA4 Creole Translator",
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color.White,
-                maxLines = 1
-            )
-            Text(
-                text = "Haitian Creole \u2194 English",
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Medium,
-                color = Color.White,
-                maxLines = 1
-            )
-        }
-
+        Text(
+            text = "Creole Translator",
+            fontSize = 20.sp,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+            modifier = Modifier.weight(1f).semantics { heading() }
+        )
         BadgedBox(
             badge = {
                 if (historyCount > 0) {
@@ -456,11 +484,357 @@ private fun AppHeader(
                 }
             }
         ) {
-            IconButton(onClick = onHistoryClick, modifier = Modifier.size(40.dp)) {
+            HeaderButton(Icons.Default.History, UIText.t("History", "Historial"), onHistoryClick)
+        }
+        HeaderButton(Icons.Default.MenuBook, UIText.t("Phrasebook", "Frases"), onPhrasebookClick)
+        HeaderButton(Icons.Default.Settings, UIText.t("Settings", "Configuración"), onSettingsClick)
+    }
+}
+
+@Composable
+private fun HeaderButton(icon: ImageVector, label: String, onClick: () -> Unit) {
+    IconButton(onClick = onClick, modifier = Modifier.size(48.dp)) {
+        Icon(icon, contentDescription = label, tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(24.dp))
+    }
+}
+
+@Composable
+private fun HeroScreen(
+    pairChip: @Composable () -> Unit,
+    notices: @Composable () -> Unit,
+    whatsNew: (@Composable () -> Unit)?,
+    mic: @Composable () -> Unit,
+    prompt: Pair<String, String>,
+    recording: (@Composable () -> Unit)?,
+    typeLabel: String,
+    typeEnabled: Boolean,
+    typeVisible: Boolean,
+    onType: () -> Unit
+) {
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .heightIn(min = maxHeight)
+                .padding(horizontal = 16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Spacer(Modifier.height(8.dp))
+            pairChip()
+            Column(Modifier.padding(top = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) { notices() }
+            whatsNew?.let { Box(Modifier.padding(top = 12.dp)) { it() } }
+            Spacer(Modifier.weight(1f).heightIn(min = 16.dp))
+            mic()
+            Text(
+                prompt.first,
+                fontSize = 22.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(top = 22.dp)
+            )
+            Text(
+                prompt.second,
+                fontSize = 17.sp,
+                color = appPalette.secondaryText,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(top = 2.dp)
+            )
+            recording?.let { Box(Modifier.padding(top = 18.dp)) { it() } }
+            Spacer(Modifier.weight(1f).heightIn(min = 16.dp))
+            TextButton(
+                onClick = onType,
+                enabled = typeEnabled,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 50.dp)
+                    .alpha(if (typeVisible) 1f else 0f)
+                    .padding(bottom = 8.dp)
+            ) {
+                Icon(Icons.Default.Keyboard, contentDescription = null, tint = appPalette.accent)
+                Spacer(Modifier.width(8.dp))
+                Text(typeLabel, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = appPalette.accent)
+            }
+        }
+    }
+}
+
+/** What changed in this version, said once: one mic for both languages, and Spanish. */
+@Composable
+private fun WhatsNewCard(onDismiss: () -> Unit) {
+    @Composable
+    fun line(icon: ImageVector, text: String, kreyol: String) {
+        Row(
+            verticalAlignment = Alignment.Top,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = Modifier.fillMaxWidth().semantics(mergeDescendants = true) {}
+        ) {
+            Icon(icon, contentDescription = null, tint = appPalette.accent, modifier = Modifier.size(24.dp))
+            Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                Text(text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
+                Text(kreyol, fontSize = 15.sp, color = appPalette.secondaryText)
+            }
+        }
+    }
+    Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = appPalette.controlSurface,
+        border = BorderStroke(1.5.dp, appPalette.controlBorder),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier.padding(start = 14.dp, end = 14.dp, top = 14.dp, bottom = 4.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Text(
+                UIText.t("New", "Nuevo") + " · Nouvo",
+                fontSize = 17.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.semantics { heading() }
+            )
+            line(
+                Icons.Default.Mic,
+                UIText.t("One button for both languages. Just speak.", "Un solo botón para los dos idiomas. Solo habla."),
+                "Yon sèl bouton pou de lang yo. Annik pale."
+            )
+            line(
+                Icons.Default.Public,
+                UIText.t("Now in Spanish too. Tap the languages at the top.", "Ahora también en español. Toca los idiomas arriba."),
+                "Kounye a an panyòl tou. Peze lang yo anlè a."
+            )
+            TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth().heightIn(min = 44.dp)) {
+                Text(UIText.t("Got it", "Entendido") + " · Dakò", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = appPalette.accent)
+            }
+        }
+    }
+}
+
+/** Kreyòl is always one side, so the only choice is the other language. */
+@Composable
+private fun PairChip(partner: Language, enabled: Boolean, onChoose: (Language) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        Surface(
+            onClick = { open = true },
+            enabled = enabled,
+            shape = RoundedCornerShape(50),
+            color = appPalette.controlSurface,
+            border = BorderStroke(1.5.dp, appPalette.controlBorder),
+            modifier = Modifier
+                .heightIn(min = 44.dp)
+                .clearAndSetSemantics {
+                    contentDescription = UIText.pair(
+                        partner,
+                        "Languages: Kreyòl and ${partner.nativeName}. Change the other language",
+                        "Idiomas: kreyòl y ${partner.nativeName}. Cambiar el otro idioma"
+                    )
+                    role = Role.Button
+                }
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Text(
+                    "${Language.CREOLE.flag} ${Language.CREOLE.nativeName} + ${partner.flag} ${partner.nativeName}",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Icon(Icons.Default.KeyboardArrowDown, contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(20.dp))
+            }
+        }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            listOf(Language.ENGLISH, Language.SPANISH).forEach { language ->
+                DropdownMenuItem(
+                    text = { Text("${language.nativeName} · ${language.kreyolName}") },
+                    leadingIcon = {
+                        if (language == partner) Icon(Icons.Default.Check, contentDescription = null)
+                        else Spacer(Modifier.size(24.dp))
+                    },
+                    onClick = {
+                        open = false
+                        onChoose(language)
+                    }
+                )
+            }
+        }
+    }
+}
+
+/** Round mic: filled when it can be pressed, red stop while recording, spinner while translating. */
+@Composable
+private fun MicButton(
+    size: Dp,
+    isRecording: Boolean,
+    isProcessing: Boolean,
+    contentDescription: String,
+    onClick: () -> Unit
+) {
+    val enabled = !isProcessing || isRecording
+    val red = appPalette.recordingRed
+    Box(
+        modifier = Modifier
+            .size(size * 1.36f)
+            .clip(CircleShape)
+            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+            .semantics { this.contentDescription = contentDescription },
+        contentAlignment = Alignment.Center
+    ) {
+        if (isRecording) {
+            Box(Modifier.size(size * 1.36f).background(red.copy(alpha = 0.10f), CircleShape))
+            Box(Modifier.size(size * 1.18f).background(red.copy(alpha = 0.18f), CircleShape))
+        }
+        Box(
+            modifier = Modifier
+                .size(size)
+                .background(
+                    if (!enabled) appPalette.controlSurface else if (isRecording) red else appPalette.accentFill,
+                    CircleShape
+                )
+                .then(if (enabled) Modifier else Modifier.border(1.5.dp, appPalette.controlBorder, CircleShape)),
+            contentAlignment = Alignment.Center
+        ) {
+            if (isProcessing) {
+                CircularProgressIndicator(
+                    color = appPalette.secondaryText,
+                    modifier = Modifier.size(size * 0.36f)
+                )
+            } else {
                 Icon(
-                    Icons.Default.History,
-                    contentDescription = "Translation History",
+                    if (isRecording) Icons.Default.Stop else Icons.Default.Mic,
+                    contentDescription = null,
                     tint = Color.White,
+                    modifier = Modifier.size(size * 0.42f)
+                )
+            }
+        }
+    }
+}
+
+/** Under the conversation in voice mode: the 84dp mic with "Ekri" beside it. */
+@Composable
+private fun VoiceDock(
+    isRecording: Boolean,
+    isProcessing: Boolean,
+    recordingElapsedMs: Long,
+    prompt: Pair<String, String>,
+    partner: Language,
+    onMic: () -> Unit,
+    onType: () -> Unit
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 6.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(2.dp)
+    ) {
+        if (isRecording) RecordingProgress(elapsedMs = recordingElapsedMs)
+        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+            MicButton(
+                size = 84.dp,
+                isRecording = isRecording,
+                isProcessing = isProcessing,
+                contentDescription = "${prompt.first}. ${prompt.second}",
+                onClick = onMic
+            )
+            if (!isRecording) {
+                Column(
+                    modifier = Modifier
+                        .align(Alignment.CenterStart)
+                        .sizeIn(minWidth = 56.dp, minHeight = 56.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .clickable(enabled = !isProcessing, role = Role.Button, onClick = onType)
+                        .clearAndSetSemantics {
+                            contentDescription = UIText.pair(partner, "Type instead", "Escribir")
+                            role = Role.Button
+                        }
+                        .padding(6.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Icon(Icons.Default.Keyboard, contentDescription = null, tint = appPalette.accent, modifier = Modifier.size(24.dp))
+                    Text("Ekri", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = appPalette.accent)
+                }
+            }
+        }
+        Text(
+            if (isRecording || isProcessing) "${prompt.first} · ${prompt.second}" else prompt.first,
+            fontSize = 13.sp,
+            color = appPalette.secondaryText,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.clearAndSetSemantics {}
+        )
+    }
+}
+
+/** Typing row: back-to-mic button, text box, send arrow. The words decide the direction. */
+@Composable
+private fun TypingDock(
+    text: String,
+    partner: Language,
+    isProcessing: Boolean,
+    focusRequester: FocusRequester,
+    onTextChange: (String) -> Unit,
+    onSend: () -> Unit,
+    onSpeak: () -> Unit
+) {
+    val hasText = text.isNotBlank()
+    val canSend = hasText && !isProcessing
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.Bottom,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        RoundControl(
+            onClick = onSpeak,
+            enabled = !isProcessing,
+            filled = false,
+            contentDescription = UIText.pair(partner, "Speak instead", "Hablar")
+        ) {
+            Icon(Icons.Default.Mic, contentDescription = null, tint = appPalette.accent, modifier = Modifier.size(22.dp))
+        }
+        OutlinedTextField(
+            value = text,
+            onValueChange = onTextChange,
+            placeholder = {
+                Text(
+                    "Ekri kreyòl oswa ${partner.kreyolName.lowercase()}…\n" +
+                        UIText.pair(partner, "Type Kreyòl or English…", "Escribe kreyòl o español…"),
+                    color = appPalette.secondaryText
+                )
+            },
+            enabled = !isProcessing,
+            minLines = 2,
+            maxLines = 5,
+            shape = RoundedCornerShape(16.dp),
+            colors = OutlinedTextFieldDefaults.colors(
+                unfocusedContainerColor = appPalette.controlSurface,
+                focusedContainerColor = appPalette.controlSurface,
+                disabledContainerColor = appPalette.controlSurface,
+                unfocusedBorderColor = appPalette.controlBorder,
+                focusedBorderColor = appPalette.accent,
+                disabledBorderColor = appPalette.controlBorder
+            ),
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+            keyboardActions = KeyboardActions(onSend = { if (canSend) onSend() }),
+            modifier = Modifier.weight(1f).focusRequester(focusRequester)
+        )
+        RoundControl(
+            onClick = onSend,
+            enabled = canSend,
+            filled = canSend,
+            contentDescription = "Tradui · " + UIText.pair(partner, "Translate", "Traducir")
+        ) {
+            if (isProcessing) {
+                CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp, color = appPalette.secondaryText)
+            } else {
+                Icon(
+                    Icons.Default.ArrowUpward,
+                    contentDescription = null,
+                    tint = if (canSend) Color.White else appPalette.secondaryText,
                     modifier = Modifier.size(22.dp)
                 )
             }
@@ -468,193 +842,225 @@ private fun AppHeader(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+/** 50dp circle: filled accent, or a bordered surface. */
 @Composable
-private fun InputModePicker(
-    inputMode: InputMode,
+private fun RoundControl(
+    onClick: () -> Unit,
     enabled: Boolean,
-    onModeChange: (InputMode) -> Unit
+    filled: Boolean,
+    contentDescription: String,
+    size: Dp = 50.dp,
+    content: @Composable () -> Unit
 ) {
-    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-        SegmentedButton(
-            selected = inputMode == InputMode.VOICE,
-            onClick = { onModeChange(InputMode.VOICE) },
-            shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
-            enabled = enabled,
-            icon = {}
+    Box(
+        modifier = Modifier
+            .size(size)
+            .clip(CircleShape)
+            .background(if (filled) appPalette.accentFill else appPalette.controlSurface)
+            .then(if (filled) Modifier else Modifier.border(1.5.dp, appPalette.controlBorder, CircleShape))
+            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+            .semantics { this.contentDescription = contentDescription },
+        contentAlignment = Alignment.Center
+    ) { content() }
+}
+
+/**
+ * One sentence and its translation. What was said is on top; the translation
+ * is the larger line, and Listen plays the translation. Kreyòl on the left
+ * (bordered surface), the other language on the right (filled). Only the
+ * newest bubble carries 👍/👎, the HD chip and ⇄ "translate the other way".
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun Bubble(
+    turn: ConversationTurn,
+    latest: Boolean,
+    speaking: Boolean,
+    onListen: () -> Unit,
+    hdPlaysLeft: Int?,
+    onHDChip: () -> Unit,
+    feedback: FeedbackState?,
+    onOtherWay: () -> Unit,
+    otherWayEnabled: Boolean,
+    partner: Language
+) {
+    val fromCreole = turn.direction.source == Language.CREOLE
+    val target = turn.direction.target
+    val onBubble = if (fromCreole) MaterialTheme.colorScheme.onSurface else Color.White
+    val listenLabel = UIText.listen(target)
+
+    val listen: @Composable () -> Unit = {
+        Surface(
+            onClick = onListen,
+            shape = RoundedCornerShape(50),
+            color = appPalette.accentFill,
+            modifier = Modifier
+                .heightIn(min = 44.dp)
+                .clearAndSetSemantics {
+                    contentDescription = "$listenLabel, ${target.nativeName}"
+                    role = Role.Button
+                }
         ) {
             Row(
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                Icon(Icons.Default.Mic, contentDescription = null, modifier = Modifier.size(16.dp))
-                Text("Voice")
-            }
-        }
-        SegmentedButton(
-            selected = inputMode == InputMode.TEXT,
-            onClick = { onModeChange(InputMode.TEXT) },
-            shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
-            enabled = enabled,
-            icon = {}
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                Icon(Icons.Default.Keyboard, contentDescription = null, modifier = Modifier.size(16.dp))
-                Text("Type")
+                Icon(if (speaking) Icons.Default.Stop else Icons.Default.VolumeUp, contentDescription = null,
+                    tint = Color.White, modifier = Modifier.size(20.dp))
+                Text(listenLabel, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
             }
         }
     }
-}
-
-@Composable
-private fun TextInputSection(
-    text: String,
-    direction: TranslationDirection,
-    isProcessing: Boolean,
-    onTextChange: (String) -> Unit,
-    onTranslate: () -> Unit
-) {
-    val placeholder = if (direction == TranslationDirection.CREOLE_TO_ENGLISH)
-        "Enter Haitian Creole text…"
-    else
-        "Enter English text…"
 
     Column(
         modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = if (fromCreole) Alignment.Start else Alignment.End,
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        OutlinedTextField(
-            value = text,
-            onValueChange = onTextChange,
-            placeholder = { Text(placeholder) },
+        Surface(
+            shape = RoundedCornerShape(20.dp),
+            color = if (fromCreole) appPalette.controlSurface else appPalette.accentFill,
+            border = if (fromCreole) BorderStroke(1.5.dp, appPalette.controlBorder) else null,
             modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(min = 100.dp, max = 180.dp),
-            enabled = !isProcessing,
-            maxLines = 6,
-            shape = RoundedCornerShape(12.dp)
-        )
-
-        Button(
-            onClick = onTranslate,
-            enabled = text.trim().isNotEmpty() && !isProcessing,
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = BrandPurple, contentColor = Color.White)
+                .padding(start = if (fromCreole) 0.dp else 32.dp, end = if (fromCreole) 32.dp else 0.dp)
+                .semantics(mergeDescendants = true) {}
         ) {
-            Icon(Icons.Default.Translate, contentDescription = null, modifier = Modifier.size(18.dp))
-            Spacer(Modifier.width(8.dp))
-            Text("Translate", fontWeight = FontWeight.SemiBold)
-        }
-    }
-}
-
-@Composable
-private fun AutoDetectChip(detected: TranslationDirection, onUndo: () -> Unit, enabled: Boolean) {
-    Surface(
-        shape = MaterialTheme.shapes.large,
-        color = MaterialTheme.colorScheme.secondaryContainer,
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Row(
-            modifier = Modifier.padding(start = 14.dp, end = 4.dp, top = 2.dp, bottom = 2.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(Icons.Default.AutoAwesome, contentDescription = null, modifier = Modifier.size(16.dp),
-                tint = MaterialTheme.colorScheme.onSecondaryContainer)
-            Spacer(Modifier.width(8.dp))
-            Text(
-                "Auto-detected ${detected.sourceLabel} → ${detected.targetLabel}",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSecondaryContainer,
-                modifier = Modifier.weight(1f)
-            )
-            TextButton(onClick = onUndo, enabled = enabled) { Text("Undo") }
-        }
-    }
-}
-
-@Composable
-private fun DirectionIndicator(direction: TranslationDirection) {
-    Surface(
-        shape = RoundedCornerShape(20.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant,
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
-            horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = "${direction.sourceFlag} ${direction.sourceLabel}",
-                fontSize = 15.sp,
-                fontWeight = FontWeight.Medium
-            )
-            Text(
-                text = "  \u2192  ",
-                fontSize = 18.sp,
-                color = appPalette.accent
-            )
-            Text(
-                text = "${direction.targetFlag} ${direction.targetLabel}",
-                fontSize = 15.sp,
-                fontWeight = FontWeight.Medium
-            )
-        }
-    }
-}
-
-@Composable
-private fun RecordButton(
-    isRecording: Boolean,
-    isProcessing: Boolean,
-    onClick: () -> Unit
-) {
-    val buttonColor = when {
-        isRecording -> appPalette.recordingRed
-        isProcessing -> MaterialTheme.colorScheme.surfaceVariant
-        else -> BrandPurple
-    }
-
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Button(
-            onClick = onClick,
-            enabled = !isProcessing,
-            shape = CircleShape,
-            colors = ButtonDefaults.buttonColors(containerColor = buttonColor),
-            modifier = Modifier.size(90.dp),
-            contentPadding = PaddingValues(0.dp)
-        ) {
-            if (isProcessing) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(32.dp),
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-            } else {
-                Icon(
-                    if (isRecording) Icons.Default.Stop else Icons.Default.Mic,
-                    contentDescription = if (isRecording) "Stop Recording" else "Start Recording",
-                    modifier = Modifier.size(40.dp),
-                    tint = Color.White
-                )
+            SelectionContainer {
+                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(
+                        "${turn.direction.source.flag} ${turn.direction.source.nativeName}",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = if (fromCreole) appPalette.secondaryText else Color.White
+                    )
+                    Text(turn.source, fontSize = 17.sp, color = onBubble)
+                    Box(
+                        Modifier
+                            .fillMaxWidth()
+                            .height(1.dp)
+                            .background(if (fromCreole) appPalette.controlBorder.copy(alpha = 0.4f) else Color.White.copy(alpha = 0.4f))
+                    )
+                    Text(
+                        turn.translation,
+                        fontSize = 20.sp,
+                        lineHeight = 26.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = if (fromCreole) appPalette.accent else Color.White
+                    )
+                }
             }
         }
 
-        Spacer(Modifier.height(6.dp))
-        Text(
-            text = when {
-                isProcessing -> "Processing..."
-                isRecording -> "Tap to stop"
-                else -> "Tap to record"
-            },
-            fontSize = 13.sp,
-            color = if (isRecording) appPalette.errorText else appPalette.secondaryText
-        )
+        if (latest) {
+            val extras: @Composable () -> Unit = {
+                feedback?.let { fb ->
+                    listOf(FeedbackRating.UP, FeedbackRating.DOWN).forEach { rating ->
+                        val chosen = fb.given == rating
+                        RoundControl(
+                            onClick = if (rating == FeedbackRating.UP) fb.onUp else fb.onDown,
+                            enabled = fb.given == null,
+                            filled = false,
+                            size = 44.dp,
+                            contentDescription = if (rating == FeedbackRating.UP) "Translation was good" else "Translation was wrong"
+                        ) {
+                            Icon(
+                                if (rating == FeedbackRating.UP) {
+                                    if (chosen) Icons.Filled.ThumbUp else Icons.Outlined.ThumbUp
+                                } else {
+                                    if (chosen) Icons.Filled.ThumbDown else Icons.Outlined.ThumbDown
+                                },
+                                contentDescription = null,
+                                tint = if (fb.given == null || chosen) appPalette.accent else appPalette.secondaryText,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+                }
+                RoundControl(
+                    onClick = onOtherWay,
+                    enabled = otherWayEnabled,
+                    filled = false,
+                    size = 44.dp,
+                    contentDescription = UIText.pair(partner, "Wrong language? Translate the other way",
+                        "¿Idioma equivocado? Traducir al revés")
+                ) {
+                    Icon(Icons.Default.SwapHoriz, contentDescription = null, tint = appPalette.accent, modifier = Modifier.size(22.dp))
+                }
+            }
+            val hd: @Composable () -> Unit = {
+                if (hdPlaysLeft != null) {
+                    // Solid surface behind the tint so the chip text keeps its contrast on the body.
+                    HDPlaysChip(playsLeft = hdPlaysLeft, onClick = onHDChip, backing = appPalette.controlSurface)
+                }
+            }
+            // Listen sits under its own bubble's side; the row wraps at large text sizes.
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp, if (fromCreole) Alignment.Start else Alignment.End),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                if (fromCreole) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) { listen(); hd() }
+                    Spacer(Modifier.weight(1f))
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) { extras() }
+                } else {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) { extras() }
+                    Spacer(Modifier.weight(1f))
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) { hd(); listen() }
+                }
+            }
+        } else {
+            listen()
+        }
     }
+}
+
+/** Things that are not part of the conversation: a wrong-pair offer, short status lines, and errors. */
+@Composable
+private fun Notices(
+    suggestedPartner: Language?,
+    onAcceptSuggestion: () -> Unit,
+    statusMessage: String?,
+    onDismissStatus: () -> Unit,
+    errorMessage: String?,
+    ttsError: String?,
+    onDismissError: () -> Unit
+) {
+    // Wrong pair (Spanish said into the English pair): offer it, don't assume it.
+    suggestedPartner?.let { other ->
+        Surface(
+            shape = RoundedCornerShape(14.dp),
+            color = appPalette.controlSurface,
+            border = BorderStroke(1.5.dp, appPalette.accent),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Row(
+                modifier = Modifier.padding(start = 12.dp, end = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(Icons.Default.Public, contentDescription = null, tint = appPalette.accent, modifier = Modifier.size(20.dp))
+                Text(
+                    UIText.t("That looked like ${other.nativeName}.", "Eso parecía ${other.nativeName}."),
+                    fontSize = 15.sp,
+                    color = appPalette.accent,
+                    modifier = Modifier.weight(1f)
+                )
+                TextButton(onClick = onAcceptSuggestion, modifier = Modifier.heightIn(min = 44.dp)) {
+                    Text(
+                        UIText.t("Switch to ${other.nativeName}", "Cambiar a ${other.nativeName}"),
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = appPalette.accent
+                    )
+                }
+            }
+        }
+    }
+    statusMessage?.let { StatusCard(message = it, isError = false, onDismiss = onDismissStatus) }
+    ttsError?.let { StatusCard(message = "TTS: $it", isError = true, onDismiss = onDismissError) }
+    errorMessage?.let { StatusCard(message = it, isError = true, onDismiss = onDismissError) }
 }
 
 /**
@@ -696,25 +1102,7 @@ private fun RecordingProgress(elapsedMs: Long) {
     }
 }
 
-@Composable
-private fun SwitchDirectionButton(onClick: () -> Unit, enabled: Boolean) {
-    OutlinedButton(
-        onClick = onClick,
-        enabled = enabled,
-        shape = RoundedCornerShape(12.dp),
-        modifier = Modifier.fillMaxWidth(0.7f)
-    ) {
-        Icon(
-            Icons.Default.SwapVert,
-            contentDescription = "Switch Direction",
-            modifier = Modifier.size(20.dp)
-        )
-        Spacer(Modifier.width(8.dp))
-        Text("Switch Direction")
-    }
-}
-
-/** Thumbs state for a result card; null hides the thumbs entirely. */
+/** Thumbs state for the newest bubble; null hides the thumbs entirely. */
 private data class FeedbackState(
     val given: FeedbackRating?,
     val onUp: () -> Unit,
@@ -750,119 +1138,22 @@ private fun FeedbackCommentDialog(onSend: (String?) -> Unit, onDismiss: () -> Un
     )
 }
 
-@Composable
-private fun ResultCard(
-    label: String,
-    flag: String,
-    text: String?,
-    onSpeak: () -> Unit,
-    isSpeaking: Boolean,
-    // HD voice plays left (null = system voice selected, no chip).
-    hdPlaysLeft: Int? = null,
-    onHDChip: () -> Unit = {},
-    feedback: FeedbackState? = null
-) {
-    Surface(
-        shape = RoundedCornerShape(16.dp),
-        color = MaterialTheme.colorScheme.surface,
-        shadowElevation = 2.dp,
-        modifier = Modifier
-            .fillMaxWidth()
-            .animateContentSize()
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "$flag $label",
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = appPalette.accent
-                )
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                if (text != null && text.isNotBlank() && hdPlaysLeft != null) {
-                    HDPlaysChip(playsLeft = hdPlaysLeft, onClick = onHDChip)
-                }
-                IconButton(
-                    onClick = onSpeak,
-                    enabled = text != null && text.isNotBlank()
-                ) {
-                    Icon(
-                        if (isSpeaking) Icons.Default.VolumeOff else Icons.Default.VolumeUp,
-                        contentDescription = "Speak",
-                        tint = if (text != null && text.isNotBlank()) appPalette.accent
-                               else appPalette.secondaryText
-                    )
-                }
-                }
-            }
-            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-            if (text == null) {
-                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-            } else {
-                Text(
-                    text = text,
-                    fontSize = 16.sp,
-                    lineHeight = 24.sp,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                if (feedback != null && text.isNotBlank()) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
-                        horizontalArrangement = Arrangement.End,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        val given = feedback.given
-                        Text(
-                            text = when (given) {
-                                FeedbackRating.UP -> "Mèsi! / Thanks!"
-                                FeedbackRating.DOWN -> "Mèsi, n ap gade l. / Thanks, we'll review it."
-                                null -> "Bon? / Good?"
-                            },
-                            fontSize = 13.sp,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        IconButton(onClick = feedback.onUp, enabled = given == null) {
-                            Icon(
-                                Icons.Default.ThumbUp,
-                                contentDescription = "Good translation",
-                                tint = if (given == null || given == FeedbackRating.UP) appPalette.accent
-                                       else appPalette.secondaryText
-                            )
-                        }
-                        IconButton(onClick = feedback.onDown, enabled = given == null) {
-                            Icon(
-                                Icons.Default.ThumbDown,
-                                contentDescription = "Bad translation",
-                                tint = if (given == null || given == FeedbackRating.DOWN) appPalette.accent
-                                       else appPalette.secondaryText
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-private data class PendingPlay(val text: String, val language: String)
+private data class PendingPlay(val card: String, val text: String, val language: String)
 
 /**
  * Sits beside a card's speaker button: "✨ HD 3" while plays remain, then
  * "▶ +10 HD" — a tap that offers the rewarded video. Mirrors iOS HDPlaysChip.
  */
 @Composable
-private fun HDPlaysChip(playsLeft: Int, onClick: () -> Unit) {
+private fun HDPlaysChip(playsLeft: Int, onClick: () -> Unit, backing: Color? = null) {
     val hasPlays = playsLeft > 0
     val label = if (hasPlays) "$playsLeft HD voice plays left"
                 else "Out of HD voice plays. Watch a short video for ${HDVoiceCredits.PLAYS_PER_AD} more"
     Surface(
         onClick = onClick,
         shape = RoundedCornerShape(50),
-        color = if (hasPlays) appPalette.accent.copy(alpha = 0.12f) else WarningOrange,
+        color = if (!hasPlays) WarningOrange
+                else appPalette.accent.copy(alpha = 0.12f).let { if (backing != null) it.compositeOver(backing) else it },
         modifier = Modifier.clearAndSetSemantics { contentDescription = label }
     ) {
         Row(
@@ -882,28 +1173,6 @@ private fun HDPlaysChip(playsLeft: Int, onClick: () -> Unit) {
                 fontSize = 12.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = fg
-            )
-        }
-    }
-}
-
-@Composable
-private fun ProcessingCard() {
-    Surface(
-        shape = RoundedCornerShape(12.dp),
-        color = appPalette.accent.copy(alpha = 0.08f),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Row(
-            modifier = Modifier.padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-            Text(
-                "Transcribing and translating...",
-                fontSize = 14.sp,
-                color = appPalette.accent
             )
         }
     }

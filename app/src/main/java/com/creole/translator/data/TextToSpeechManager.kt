@@ -138,16 +138,22 @@ class TextToSpeechManager(
         return lastHDAudio?.first != hd.key
     }
 
-    private fun playbackSpeed(language: String): Double =
-        if (language == "ht") voiceSettings.creolePlaybackSpeed.value else voiceSettings.englishPlaybackSpeed.value
+    private fun playbackSpeed(language: String): Double = when (language) {
+        "ht" -> voiceSettings.creolePlaybackSpeed.value
+        "es" -> voiceSettings.spanishPlaybackSpeed
+        else -> voiceSettings.englishPlaybackSpeed.value
+    }
 
     /** The AI voice request for [text], or null when the system voice is selected. */
     private fun hdRequest(text: String, language: String): HDRequest? {
-        val isCreole = language == "ht"
-        val provider = if (isCreole) voiceSettings.creoleProvider.value else voiceSettings.englishProvider.value
-        // GROQ treated as OPENAI (migration compat — Groq TTS removed)
-        if (provider == TTSProvider.SYSTEM) return null
-        val voice = if (isCreole) voiceSettings.openAIVoice.value else voiceSettings.englishOpenAIVoice.value
+        // GROQ treated as OPENAI (migration compat — Groq TTS removed). Spanish
+        // is OpenAI or the system voice, like iOS.
+        if (!voiceSettings.usesHDVoice(language)) return null
+        val voice = when (language) {
+            "ht" -> voiceSettings.openAIVoice.value
+            "es" -> voiceSettings.spanishOpenAIVoice
+            else -> voiceSettings.englishOpenAIVoice.value
+        }
         val speed = playbackSpeed(language)
         return HDRequest(voice, speed, "openai|$voice|$speed|$language|$text")
     }
@@ -158,7 +164,7 @@ class TextToSpeechManager(
             put("text", text)
             put("voice", voice)
             put("speed", clampedSpeed)
-            // "ht"|"en" — lets the proxy apply Creole pronunciation respellings before synthesis.
+            // "ht"|"en"|"es" — lets the proxy apply Creole pronunciation respellings before synthesis.
             put("language", language)
         }.toString().toRequestBody("application/json".toMediaType())
 
@@ -221,6 +227,7 @@ class TextToSpeechManager(
 
         val locale = when (language) {
             "ht" -> Locale.FRENCH  // Closest available locale for Haitian Creole
+            "es" -> Locale("es", "MX")  // Latin American Spanish, like iOS es-MX
             else -> Locale.US
         }
 

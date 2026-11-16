@@ -3,49 +3,118 @@ package com.creole.translator.model
 import java.util.Date
 import java.util.UUID
 
-enum class TranslationDirection {
-    CREOLE_TO_ENGLISH,
-    ENGLISH_TO_CREOLE;
+/** A language the app translates. Haitian Creole is always one side of a pair. Mirrors iOS `Language`. */
+enum class Language(val code: String) {
+    CREOLE("ht"),
+    ENGLISH("en"),
+    SPANISH("es");
 
-    val sourceLanguage: String get() = when (this) {
-        CREOLE_TO_ENGLISH -> "ht"
-        ENGLISH_TO_CREOLE -> "en"
+    /** The language's own name for itself — what its speakers look for. */
+    val nativeName: String get() = when (this) {
+        CREOLE -> "Kreyòl"
+        ENGLISH -> "English"
+        SPANISH -> "Español"
     }
 
-    val targetLanguage: String get() = when (this) {
-        CREOLE_TO_ENGLISH -> "en"
-        ENGLISH_TO_CREOLE -> "ht"
+    val englishName: String get() = when (this) {
+        CREOLE -> "Creole"
+        ENGLISH -> "English"
+        SPANISH -> "Spanish"
     }
 
-    val sourceLabel: String get() = when (this) {
-        CREOLE_TO_ENGLISH -> "Haitian Creole"
-        ENGLISH_TO_CREOLE -> "English"
+    /** What a Kreyòl speaker calls the language ("Panyòl", not "Español"). */
+    val kreyolName: String get() = when (this) {
+        CREOLE -> "Kreyòl"
+        ENGLISH -> "Anglè"
+        SPANISH -> "Panyòl"
     }
 
-    val targetLabel: String get() = when (this) {
-        CREOLE_TO_ENGLISH -> "English"
-        ENGLISH_TO_CREOLE -> "Haitian Creole"
+    /**
+     * No one flag stands for English or Spanish, so the flag is the phone's
+     * country when that country speaks the language (the country in the
+     * phone's language setting wins over its region), else 🇺🇸 / 🇲🇽.
+     */
+    val flag: String get() = when (this) {
+        CREOLE -> "\uD83C\uDDED\uD83C\uDDF9"  // 🇭🇹
+        ENGLISH -> regionFlag("en", ENGLISH_REGIONS) ?: "\uD83C\uDDFA\uD83C\uDDF8"  // 🇺🇸
+        SPANISH -> regionFlag("es", SPANISH_REGIONS) ?: "\uD83C\uDDF2\uD83C\uDDFD"  // 🇲🇽
     }
 
-    val sourceFlag: String get() = when (this) {
-        CREOLE_TO_ENGLISH -> "\uD83C\uDDED\uD83C\uDDF9"  // 🇭🇹
-        ENGLISH_TO_CREOLE -> "\uD83C\uDDFA\uD83C\uDDF8"  // 🇺🇸
+    companion object {
+        val ENGLISH_REGIONS = setOf("US", "CA", "GB", "AU", "NZ", "IE", "JM", "BS", "BB", "TT", "BZ", "GY", "ZA", "NG", "GH", "KE", "LR")
+        val SPANISH_REGIONS = setOf("MX", "DO", "CL", "CO", "AR", "PE", "VE", "EC", "GT", "CU", "BO", "HN", "PY", "SV", "NI", "CR", "PA", "UY", "PR", "ES")
+
+        fun fromCode(code: String): Language? = entries.firstOrNull { code.startsWith(it.code) }
+
+        /** Phone languages, most preferred first. */
+        private fun phoneLocales(): List<java.util.Locale> {
+            val list = android.os.LocaleList.getDefault()
+            return (0 until list.size()).map { list[it] }
+        }
+
+        /** Spanish is the phone's first language. */
+        val phoneIsSpanish: Boolean
+            get() = (phoneLocales().firstOrNull() ?: java.util.Locale.getDefault()).language == "es"
+
+        /**
+         * Whether a fresh install opens on Kreyòl + Español instead of Kreyòl +
+         * English: Spanish is the phone's first language, or the phone's region
+         * is a Spanish-speaking country whatever its language.
+         */
+        val phoneSuggestsSpanish: Boolean
+            get() = phoneIsSpanish ||
+                java.util.Locale.getDefault().country.uppercase() in SPANISH_REGIONS ||
+                (phoneLocales().firstOrNull()?.country?.uppercase() in SPANISH_REGIONS)
+
+        private fun regionFlag(code: String, regions: Set<String>): String? {
+            val locales = phoneLocales()
+            val fromLanguages = locales.firstOrNull { it.language == code && it.country.uppercase() in regions }?.country
+            val deviceRegion = (locales.firstOrNull() ?: java.util.Locale.getDefault()).country.uppercase()
+            val region = (fromLanguages ?: deviceRegion.takeIf { it in regions })?.uppercase() ?: return null
+            return region.map { String(Character.toChars(0x1F1E6 + (it - 'A'))) }.joinToString("")
+        }
+    }
+}
+
+/** The four supported directions; Creole is always one side. Mirrors iOS `TranslationDirection`. */
+enum class TranslationDirection(val source: Language, val target: Language) {
+    CREOLE_TO_ENGLISH(Language.CREOLE, Language.ENGLISH),
+    ENGLISH_TO_CREOLE(Language.ENGLISH, Language.CREOLE),
+    CREOLE_TO_SPANISH(Language.CREOLE, Language.SPANISH),
+    SPANISH_TO_CREOLE(Language.SPANISH, Language.CREOLE);
+
+    val sourceLanguage: String get() = source.code
+    val targetLanguage: String get() = target.code
+    val sourceLabel: String get() = source.englishName
+    val targetLabel: String get() = target.englishName
+    val sourceFlag: String get() = source.flag
+    val targetFlag: String get() = target.flag
+
+    /** The non-Creole language of the pair. */
+    val partner: Language get() = if (source == Language.CREOLE) target else source
+
+    /** Proxy direction code ("ht-en", "es-ht", …) — the system prompt lives server-side. */
+    val proxyDirection: String get() = "${source.code}-${target.code}"
+
+    val reversed: TranslationDirection get() = of(target, source) ?: this
+
+    /** Same side of the conversation, other partner language (English → Creole becomes Spanish → Creole). */
+    fun withPartner(partner: Language): TranslationDirection {
+        if (partner == Language.CREOLE) return this
+        return (if (source == Language.CREOLE) of(Language.CREOLE, partner) else of(partner, Language.CREOLE)) ?: this
     }
 
-    val targetFlag: String get() = when (this) {
-        CREOLE_TO_ENGLISH -> "\uD83C\uDDFA\uD83C\uDDF8"  // 🇺🇸
-        ENGLISH_TO_CREOLE -> "\uD83C\uDDED\uD83C\uDDF9"  // 🇭🇹
-    }
+    companion object {
+        fun of(source: Language, target: Language): TranslationDirection? =
+            entries.firstOrNull { it.source == source && it.target == target }
 
-    val systemPrompt: String get() = when (this) {
-        CREOLE_TO_ENGLISH ->
-            "You are a professional translator specializing in Haitian Creole and English. " +
-            "Translate the following Haitian Creole text to English. " +
-            "Provide only the translation, no explanations or additional text."
-        ENGLISH_TO_CREOLE ->
-            "You are a professional translator specializing in Haitian Creole and English. " +
-            "Translate the following English text to Haitian Creole. " +
-            "Provide only the translation, no explanations or additional text."
+        fun fromProxy(code: String): TranslationDirection? {
+            val parts = code.split("-")
+            if (parts.size != 2) return null
+            val s = Language.entries.firstOrNull { it.code == parts[0] } ?: return null
+            val t = Language.entries.firstOrNull { it.code == parts[1] } ?: return null
+            return of(s, t)
+        }
     }
 }
 

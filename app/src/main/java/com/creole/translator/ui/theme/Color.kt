@@ -37,6 +37,13 @@ data class AppPalette(
     val warningText: Color,
     /** Stop Recording button background; white text on it in both modes. */
     val recordingRed: Color,
+    /** Background for filled controls with white text (mic, send, Listen, partner bubble). */
+    val accentFill: Color = Color(0xFF7B2D8B),
+    /** Fill of bordered controls (pair chip, text box, Creole bubble, round buttons). */
+    val controlSurface: Color,
+    /** 1.5dp edge that makes a control read as a control: ≥3:1 against the body
+     * and the control surface in both modes. Same values as iOS controlBorder. */
+    val controlBorder: Color,
 )
 
 val LightPalette = AppPalette(
@@ -45,6 +52,8 @@ val LightPalette = AppPalette(
     errorText = Color(0xFFC4001A),
     warningText = Color(0xFFA84300),
     recordingRed = Color(0xFFC4001A),
+    controlSurface = Color(0xFFFFFFFF),
+    controlBorder = Color(0xFF6E6E73),
 )
 
 val DarkPalette = AppPalette(
@@ -53,4 +62,6 @@ val DarkPalette = AppPalette(
     errorText = Color(0xFFFF6961),
     warningText = Color(0xFFFFB340),
     recordingRed = Color(0xFFC4001A),
+    controlSurface = Color(0xFF211D26),
+    controlBorder = Color(0xFF7C7C80),
 )

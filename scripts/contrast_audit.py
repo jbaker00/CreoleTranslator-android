@@ -38,7 +38,7 @@ MODES = {
         secContainer=hx('F3DAF5'), onSecContainer=hx('2E1033'),
         errContainer=hx('F9DEDC'), onErrContainer=hx('410E0B'),
         accent=hx('7B2D8B'), sec=hx('5E5866'), err=hx('C4001A'), warn=hx('A84300'),
-        rec=hx('C4001A'), fill=hx('7B2D8B')),
+        rec=hx('C4001A'), fill=hx('7B2D8B'), surf=hx('FFFFFF'), border=hx('6E6E73')),
     'dark': dict(
         bg=hx('141218'), surface=hx('211D26'), surfaceVariant=hx('2E2934'),
         onSurface=hx('E6E0E9'), onSurfaceVariant=hx('CAC4D0'),
@@ -46,7 +46,7 @@ MODES = {
         secContainer=hx('5A2A63'), onSecContainer=hx('F7D8FF'),
         errContainer=hx('8C1D18'), onErrContainer=hx('F9DEDC'),
         accent=hx('E0B6EE'), sec=hx('B5AEBD'), err=hx('FF6961'), warn=hx('FFB340'),
-        rec=hx('C4001A'), fill=hx('7B2D8B')),
+        rec=hx('C4001A'), fill=hx('7B2D8B'), surf=hx('211D26'), border=hx('7C7C80')),
 }
 WHITE, BLACK = hx('FFFFFF'), hx('000000')
 # Header gradient (all modes): BrandPurple -> HeaderPink
@@ -68,6 +68,16 @@ def rows(S):
         ('Card result text', S['onSurface'], [S['surface']], 4.5),
         ('Card feedback prompt / thumb not chosen / speaker disabled', S['sec'], [S['surface']], 4.5),
         ('HD chip', A, [over(tint(A, 0.12), S['surface'])], 4.5),
+        # Just talk (conversation screen)
+        ('Header title / icons (plain header)', S['onSurface'], [S['bg']], 4.5),
+        ('Control border (pair chip, text box, Creole bubble, round buttons)', S['border'], [S['bg'], S['surf']], 3),
+        ('Mic / send / Listen / partner bubble (white on fill)', WHITE, [S['fill']], 4.5),
+        ('Creole bubble: translation, thumbs, swap, pair chip text (accent on control surface)', A, [S['surf']], 4.5),
+        ('Creole bubble: source text', S['onSurface'], [S['surf']], 4.5),
+        ('Creole bubble language label / placeholder / disabled send', S['sec'], [S['surf']], 4.5),
+        ('Hero prompt line 2 / dock caption / processing row', S['sec'], [S['bg']], 4.5),
+        ('HD chip under a bubble (tint over control surface)', A, [over(tint(A, 0.12), S['surf'])], 4.5),
+        ('Type instead / What\'s New accent (on body)', A, [S['bg']], 4.5),
         ('HD chip empty (black on orange)', BLACK, [ORANGE], 4.5),
         ('Processing card', A, [over(tint(A, 0.08), S['bg'])], 4.5),
         ('Status card', S['onSecContainer'], [S['secContainer']], 4.5),
