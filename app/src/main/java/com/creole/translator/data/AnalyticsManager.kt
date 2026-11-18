@@ -61,21 +61,32 @@ object AnalyticsManager {
     private fun bundleToString(b: Bundle): String =
         b.keySet().joinToString(", ") { k -> "$k=${b.getString(k) ?: b.get(k).toString()}" }
 
-    // --- Translation events ---
-    /** Auto-detect flipped the direction the user had selected (from/to are source-language codes). */
-    fun logAutoDetectFlip(from: String, to: String) {
-        logEvent("auto_detect_flip", Bundle().apply { putString("from", from); putString("to", to) })
-    }
-
-    /** User tapped Undo on the auto-detect chip, reverting to their manually selected direction. */
+    /** User tapped ⇄ "translate the other way" on the newest bubble (the language was read wrong).
+     * [direction] is the direction that was wrong. Same event name as iOS. */
     fun logAutoDetectUndo(direction: String) {
         logEvent("auto_detect_undo", Bundle().apply { putString("direction", direction) })
     }
 
+    /** Mic tapped to start a recording. [pair] = "en-ht" | "es-ht". */
+    fun logMicTapped(pair: String) {
+        logEvent("mic_tapped", Bundle().apply { putString("pair", pair) })
+    }
+
+    /** Other language chosen from the pair chip or Settings. */
+    fun logPairSelected(pair: String) {
+        logEvent("pair_selected", Bundle().apply { putString("pair", pair) })
+    }
+
+    /** "That looked like Español — Switch" chip accepted. */
+    fun logPairSuggestionAccepted(pair: String) {
+        logEvent("pair_suggestion_accepted", Bundle().apply { putString("pair", pair) })
+    }
+
     // Called on every successful translation — this is your core "how many translations" metric
-    fun logTranslation(direction: String, charLength: Int, isVoice: Boolean, success: Boolean) {
+    fun logTranslation(direction: String, pair: String, charLength: Int, isVoice: Boolean, success: Boolean) {
         val p = Bundle().apply {
-            putString("direction", direction) // ht-en or en-ht
+            putString("direction", direction) // ht-en, en-ht, ht-es, es-ht
+            putString("pair", pair) // en-ht or es-ht
             putInt("char_length", charLength)
             putString("input_mode", if (isVoice) "voice" else "text")
             putString("result", if (success) "success" else "failure")
@@ -110,11 +121,6 @@ object AnalyticsManager {
     /** User tapped 👍/👎 on the translated-text card. */
     fun logTranslationFeedback(rating: String) {
         logEvent("translation_feedback", Bundle().apply { putString("rating", rating) })
-    }
-
-    /** User tapped 👍/👎 on the source-text (transcription) card for a voice result. */
-    fun logSttFeedback(rating: String) {
-        logEvent("stt_feedback", Bundle().apply { putString("rating", rating) })
     }
 
     // --- Ad events ---

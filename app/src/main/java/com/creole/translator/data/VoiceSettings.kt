@@ -112,14 +112,21 @@ class VoiceSettings(context: Context) {
         prefs.edit().putFloat("creolePlaybackSpeed", speed.toFloat()).apply()
     }
 
-    // Auto-detect the input language and flip direction when it clearly
-    // disagrees with the selected one. Default ON; the user can undo a flip
-    // per translation or turn it off here.
-    private val _autoDetectLanguage = MutableStateFlow(prefs.getBoolean("autoDetectLanguage", true))
-    val autoDetectLanguage: StateFlow<Boolean> = _autoDetectLanguage.asStateFlow()
+    // --- Spanish (Latin American) ---
+    // OpenAI or System only. No settings UI yet (same as iOS 3.7); the keys
+    // and defaults match iOS so a future Settings section can use them.
+    private val _spanishProvider = MutableStateFlow(
+        if (TTSProvider.from(prefs.getString("spanishProvider", null)) == TTSProvider.SYSTEM) TTSProvider.SYSTEM
+        else TTSProvider.OPENAI
+    )
+    val spanishProvider: StateFlow<TTSProvider> = _spanishProvider.asStateFlow()
+    val spanishOpenAIVoice: String get() = prefs.getString("spanishOpenAIVoice", "nova") ?: "nova"
+    val spanishPlaybackSpeed: Double get() = prefs.getFloat("spanishPlaybackSpeed", 1.0f).toDouble()
 
-    fun setAutoDetectLanguage(enabled: Boolean) {
-        _autoDetectLanguage.value = enabled
-        prefs.edit().putBoolean("autoDetectLanguage", enabled).apply()
+    /** True when [language] ("ht"|"en"|"es") plays with an AI (HD) voice. */
+    fun usesHDVoice(language: String): Boolean = when (language) {
+        "ht" -> _creoleProvider.value != TTSProvider.SYSTEM
+        "es" -> _spanishProvider.value != TTSProvider.SYSTEM
+        else -> _englishProvider.value != TTSProvider.SYSTEM
     }
 }

@@ -53,35 +53,23 @@ class GroqService(context: Context) {
             .url("$PROXY_BASE$path")
             .addHeader("x-device-id", deviceId)
 
-    suspend fun processText(
-        text: String,
-        direction: TranslationDirection
-    ): TranslationResult = withContext(Dispatchers.IO) {
-        translateText(text, direction, TranslationSource.TYPED)
-    }
-
-    suspend fun processAudio(
-        audioFile: File,
-        direction: TranslationDirection
-    ): TranslationResult = withContext(Dispatchers.IO) {
-        val transcription = transcribeAudio(audioFile, direction.sourceLanguage)
-        // gpt-transcribe declines rather than guesses; the proxy rejects empty text.
-        if (transcription.isBlank()) throw GroqError.NothingHeard
-        translateText(transcription, direction, TranslationSource.VOICE)
-    }
-
-    /** Transcribe only, forcing Whisper to [language] ("ht"|"en"). */
+    /** Transcribe only. [language] is the `x-language` hint; with the Creole
+     * engine ("ht") the transcript is in whichever language was spoken, which
+     * is what lets one mic take both languages of the pair. */
     suspend fun transcribe(audioFile: File, language: String): String = withContext(Dispatchers.IO) {
         transcribeAudio(audioFile, language)
     }
 
-    /** Translate already-known text in an explicit direction (auto-detect / undo paths). */
+    /** Translate already-known text. [autoDirection] lets the proxy translate the
+     * other way when the text is already in the target language; the result's
+     * `direction` is the one actually used. */
     suspend fun translate(
         text: String,
         direction: TranslationDirection,
-        source: TranslationSource
+        source: TranslationSource,
+        autoDirection: Boolean = false
     ): TranslationResult = withContext(Dispatchers.IO) {
-        translateText(text, direction, source)
+        translateText(text, direction, source, autoDirection)
     }
 
     /** Rate a captured translation. Best-effort: never throws, never blocks the UI path. */
@@ -136,17 +124,14 @@ class GroqService(context: Context) {
     private fun translateText(
         text: String,
         direction: TranslationDirection,
-        source: TranslationSource
+        source: TranslationSource,
+        autoDirection: Boolean
     ): TranslationResult {
-        val proxyDirection = when (direction) {
-            TranslationDirection.CREOLE_TO_ENGLISH -> "ht-en"
-            TranslationDirection.ENGLISH_TO_CREOLE -> "en-ht"
-        }
-
         val requestJson = JSONObject().apply {
             put("text", text)
-            put("direction", proxyDirection)
+            put("direction", direction.proxyDirection)
             put("source", source.wire)
+            put("autoDirection", autoDirection)
         }
 
         val request = proxyRequest("/v1/translate")
@@ -167,7 +152,9 @@ class GroqService(context: Context) {
             TranslationResult(
                 transcription = text,
                 translation = obj.getString("translation").trim(),
-                direction = direction,
+                // Absent on an older proxy; differs from the request only with autoDirection.
+                direction = obj.optString("direction").takeIf { it.isNotBlank() }
+                    ?.let { TranslationDirection.fromProxy(it) } ?: direction,
                 sampleId = obj.optString("sampleId").takeIf { it.isNotBlank() },
                 confidence = if (obj.isNull("confidence")) null else obj.optInt("confidence").takeIf { it in 1..5 }
             )

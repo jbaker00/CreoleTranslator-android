@@ -17,10 +17,11 @@ import com.creole.translator.data.TranslationHistoryManager
 import com.creole.translator.data.AnalyticsManager
 import com.creole.translator.data.VoiceSettings
 import com.creole.translator.model.FeedbackRating
-import com.creole.translator.model.FeedbackTarget
 import com.creole.translator.model.GroqError
+import com.creole.translator.model.Language
 import com.creole.translator.model.TranslationDirection
 import com.creole.translator.model.TranslationEntry
+import com.creole.translator.model.TranslationResult
 import com.creole.translator.model.TranslationSource
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -37,6 +38,16 @@ import java.io.File
 enum class Screen { MAIN, HISTORY, SETTINGS, PHRASEBOOK }
 
 enum class InputMode { VOICE, TEXT }
+
+/** One spoken or typed sentence and its translation, shown as a bubble. Mirrors iOS `ConversationTurn`. */
+data class ConversationTurn(
+    val id: String = java.util.UUID.randomUUID().toString(),
+    val source: String,
+    val translation: String,
+    val direction: TranslationDirection,
+    val sampleId: String?,
+    val input: TranslationSource
+)
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -76,18 +87,31 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _isProcessing = MutableStateFlow(false)
     val isProcessing: StateFlow<Boolean> = _isProcessing.asStateFlow()
 
-    // Translation direction
-    private val _direction = MutableStateFlow(TranslationDirection.CREOLE_TO_ENGLISH)
+    private val appPrefs = application.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
+
+    // Just talk: there is no direction setting. This is the direction last
+    // used — the pair (Kreyòl + English / Español) and the fallback for words
+    // the detector can't place. Remembered between launches (iOS
+    // `translationDirection`); a fresh install on a Spanish-language phone or
+    // in a Spanish-speaking country starts on Kreyòl + Español.
+    private val _direction = MutableStateFlow(
+        appPrefs.getString(KEY_DIRECTION, null)
+            ?.let { runCatching { TranslationDirection.valueOf(it) }.getOrNull() }
+            ?: if (Language.phoneSuggestsSpanish) TranslationDirection.SPANISH_TO_CREOLE
+               else TranslationDirection.CREOLE_TO_ENGLISH
+    )
     val direction: StateFlow<TranslationDirection> = _direction.asStateFlow()
 
-    // Results
-    private val _transcription = MutableStateFlow("")
-    val transcription: StateFlow<String> = _transcription.asStateFlow()
+    private fun setDirection(direction: TranslationDirection) {
+        _direction.value = direction
+        appPrefs.edit().putString(KEY_DIRECTION, direction.name).apply()
+    }
 
-    private val _translation = MutableStateFlow("")
-    val translation: StateFlow<String> = _translation.asStateFlow()
+    /** The conversation on screen, oldest first. This session only; History keeps the lasting copy. */
+    private val _turns = MutableStateFlow<List<ConversationTurn>>(emptyList())
+    val turns: StateFlow<List<ConversationTurn>> = _turns.asStateFlow()
 
-    // QA feedback for the current translation. sampleId is null when the proxy
+    // QA feedback for the newest bubble. sampleId is null when the proxy
     // didn't capture it (override hit, older proxy) — then no thumbs are shown.
     private val _currentSampleId = MutableStateFlow<String?>(null)
     val currentSampleId: StateFlow<String?> = _currentSampleId.asStateFlow()
@@ -95,23 +119,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _feedbackGiven = MutableStateFlow<FeedbackRating?>(null)
     val feedbackGiven: StateFlow<FeedbackRating?> = _feedbackGiven.asStateFlow()
 
-    // STT accuracy rating for the current transcription (voice results only;
-    // typed text has no transcription step, so the UI hides these thumbs).
-    private val _sttFeedbackGiven = MutableStateFlow<FeedbackRating?>(null)
-    val sttFeedbackGiven: StateFlow<FeedbackRating?> = _sttFeedbackGiven.asStateFlow()
+    /** Other language the last input looked like (English typed into the
+     * Spanish pair, or the reverse). Offered as a chip; never applied silently. */
+    private val _suggestedPartner = MutableStateFlow<Language?>(null)
+    val suggestedPartner: StateFlow<Language?> = _suggestedPartner.asStateFlow()
 
-    // True when the current result came from the voice path (processAudio).
-    private val _isVoiceResult = MutableStateFlow(false)
-    val isVoiceResult: StateFlow<Boolean> = _isVoiceResult.asStateFlow()
+    /** One-time "New · Nouvo" card on the first screen; gone on "Got it" or the first translation. */
+    private val _showWhatsNew = MutableStateFlow(appPrefs.getString(KEY_WHATS_NEW, null) != WHATS_NEW_VERSION)
+    val showWhatsNew: StateFlow<Boolean> = _showWhatsNew.asStateFlow()
 
-    // Auto-detect: when the detector overrides the user's selected direction,
-    // this holds the direction they had selected, so the UI can show the
-    // "Auto-detected … · Undo" chip and undoAutoDetect() can re-translate.
-    private val _autoDetectOverrode = MutableStateFlow<TranslationDirection?>(null)
-    val autoDetectOverrode: StateFlow<TranslationDirection?> = _autoDetectOverrode.asStateFlow()
+    fun dismissWhatsNew() {
+        _showWhatsNew.value = false
+        appPrefs.edit().putString(KEY_WHATS_NEW, WHATS_NEW_VERSION).apply()
+    }
 
-    private var lastInputText: String = ""
-    private var lastInputSource: TranslationSource = TranslationSource.TYPED
+    /** What produced the newest bubble, so it can be translated again. */
+    private var lastInput: Pair<String, TranslationSource>? = null
 
     // Status / error messages
     private val _statusMessage = MutableStateFlow<String?>(null)
@@ -143,8 +166,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    private val appPrefs = application.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
-
     // Emitted after every successful translation; InterstitialAdManager decides
     // whether an ad is actually due (interval, session cap, spacing).
     private val _interstitialEvent = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
@@ -153,15 +174,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _reviewEvent = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val reviewEvent: SharedFlow<Unit> = _reviewEvent.asSharedFlow()
 
-    private fun onTranslationSuccess(direction: TranslationDirection? = null, charLength: Int = 0, isVoice: Boolean = true) {
+    /** "en-ht" or "es-ht", whichever pair is on screen (iOS `pairCode`). */
+    private val pairCode: String get() = "${_direction.value.partner.code}-ht"
+
+    private fun onTranslationSuccess(direction: TranslationDirection, charLength: Int, isVoice: Boolean) {
         // Analytics: core metric for Android vs iOS comparison
-        if (direction != null) {
-            val dirCode = when (direction) {
-                TranslationDirection.CREOLE_TO_ENGLISH -> "ht-en"
-                TranslationDirection.ENGLISH_TO_CREOLE -> "en-ht"
-            }
-            AnalyticsManager.logTranslation(dirCode, charLength, isVoice, true)
-        }
+        AnalyticsManager.logTranslation(direction.proxyDirection, pairCode, charLength, isVoice, true)
         maybeRequestReview()
         _interstitialEvent.tryEmit(Unit)
     }
@@ -179,67 +197,113 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _reviewEvent.tryEmit(Unit)
     }
 
-    // ── Auto-detect ──────────────────────────────────────────────────────────
+    // ── Just talk: detection ─────────────────────────────────────────────────
 
-    /**
-     * Returns the direction to translate [text] in. When auto-detect is on and
-     * the detector is confident the text is in the *target* language of the
-     * selected direction, flips to the detected direction (and records the
-     * override for the Undo chip). UNKNOWN never flips.
-     */
-    private fun effectiveDirection(text: String, selected: TranslationDirection, allowAuto: Boolean): TranslationDirection {
-        _autoDetectOverrode.value = null
-        if (!allowAuto || !voiceSettings.autoDetectLanguage.value) return selected
-        val detected = when (LanguageDetector.detect(text).language) {
-            LanguageDetector.Language.HT -> TranslationDirection.CREOLE_TO_ENGLISH
-            LanguageDetector.Language.EN -> TranslationDirection.ENGLISH_TO_CREOLE
-            LanguageDetector.Language.UNKNOWN -> return selected
+    /** The direction to translate [text] in: the detector's answer within the
+     * pair of [fallback], else [fallback] itself. */
+    private fun detectedDirection(text: String, fallback: TranslationDirection): TranslationDirection {
+        val partner = fallback.partner
+        return when (LanguageDetector.detect(text, partner)) {
+            LanguageDetector.Detected.CREOLE -> TranslationDirection.of(Language.CREOLE, partner) ?: fallback
+            LanguageDetector.Detected.ENGLISH, LanguageDetector.Detected.SPANISH ->
+                TranslationDirection.of(partner, Language.CREOLE) ?: fallback
+            LanguageDetector.Detected.UNKNOWN -> fallback
         }
-        if (detected == selected) return selected
-        _autoDetectOverrode.value = selected
-        _direction.value = detected
-        AnalyticsManager.logAutoDetectFlip(selected.sourceLanguage, detected.sourceLanguage)
-        return detected
     }
 
-    /** User rejected the auto flip: go back to their direction and translate again there. */
-    fun undoAutoDetect() {
-        val manual = _autoDetectOverrode.value ?: return
-        AnalyticsManager.logAutoDetectUndo(manual.sourceLanguage)
-        _autoDetectOverrode.value = null
-        _direction.value = manual
-        translateInput(lastInputText, lastInputSource, allowAuto = false)
+    /** The other non-Creole language, when the text clearly reads as that one
+     * and not as anything in the selected pair. */
+    private fun otherPartner(text: String, selected: TranslationDirection): Language? {
+        val other = if (selected.partner == Language.ENGLISH) Language.SPANISH else Language.ENGLISH
+        if (LanguageDetector.detect(text, selected.partner) != LanguageDetector.Detected.UNKNOWN) return null
+        val guess = LanguageDetector.detect(text, other)
+        return if (guess == LanguageDetector.Detected.ENGLISH || guess == LanguageDetector.Detected.SPANISH) other else null
     }
 
-    private fun translateInput(text: String, source: TranslationSource, allowAuto: Boolean) {
+    /** Pair chip / Settings: Kreyòl is always one side, so the only choice is the other language. */
+    fun choosePartner(partner: Language) {
+        if (partner == _direction.value.partner) return
+        // Earlier bubbles keep the languages they were translated in.
+        setDirection(_direction.value.withPartner(partner))
+        _suggestedPartner.value = null
+        AnalyticsManager.logPairSelected(pairCode)
+    }
+
+    fun acceptSuggestedPartner() {
+        val partner = _suggestedPartner.value ?: return
+        val input = lastInput ?: return
+        _suggestedPartner.value = null
+        TranslationDirection.of(partner, Language.CREOLE)?.let { setDirection(it) }
+        AnalyticsManager.logPairSuggestionAccepted(pairCode)
+        processTextInput(input.first, input.second, replaceLast = true)
+    }
+
+    /** The way out when the app read the language wrong: the newest bubble is
+     * translated again in the opposite direction, with detection off. */
+    fun translateLastOtherWay() {
+        val last = _turns.value.lastOrNull() ?: return
+        if (_isProcessing.value) return
+        AnalyticsManager.logAutoDetectUndo(last.direction.proxyDirection)
+        processTextInput(last.source, last.input, forced = last.direction.reversed, replaceLast = true)
+    }
+
+    /** Adds a finished translation to the conversation. The direction it used
+     * is remembered as the fallback for words the detector can't place. */
+    private fun show(result: TranslationResult, input: TranslationSource, replaceLast: Boolean) {
+        val turn = ConversationTurn(
+            source = result.transcription,
+            translation = result.translation,
+            direction = result.direction,
+            sampleId = result.sampleId,
+            input = input
+        )
+        _turns.value = (if (replaceLast) _turns.value.dropLast(1) else _turns.value) + turn
+        setDirection(result.direction)
+        if (_showWhatsNew.value) dismissWhatsNew()
+        _currentSampleId.value = result.sampleId
+        _feedbackGiven.value = null
+        lastInput = result.transcription to input
+        _suggestedPartner.value = otherPartner(result.transcription, result.direction)
+        _statusMessage.value = null
+        historyManager.addEntry(
+            sourceText = result.transcription,
+            translatedText = result.translation,
+            direction = result.direction
+        )
+        onTranslationSuccess(result.direction, result.translation.length, input == TranslationSource.VOICE)
+    }
+
+    private fun showFailure(e: Exception, isVoice: Boolean) {
+        AnalyticsManager.logTranslationFailed(_direction.value.proxyDirection, isVoice, e.javaClass.simpleName + ": " + (e.message ?: ""))
+        _errorMessage.value = when (e) {
+            is GroqError.InvalidApiKey -> "Service authorization failed. Please try again later."
+            is GroqError.TranscriptionFailed -> "Transcription failed: ${e.message}"
+            is GroqError.TranslationFailed -> "Translation failed: ${e.message}"
+            is GroqError.NetworkError -> "Network error: ${e.message}"
+            else -> "Error: ${e.message}"
+        }
+    }
+
+    /** [forced] skips detection (used by "translate the other way"). */
+    private fun processTextInput(
+        text: String,
+        source: TranslationSource,
+        forced: TranslationDirection? = null,
+        replaceLast: Boolean = false
+    ) {
         viewModelScope.launch {
             _isProcessing.value = true
             _errorMessage.value = null
-            _translation.value = ""
-            _currentSampleId.value = null
-            _feedbackGiven.value = null
-            _sttFeedbackGiven.value = null
+            _statusMessage.value = null
             try {
-                val dir = effectiveDirection(text, _direction.value, allowAuto)
-                val result = groqService.translate(text, dir, source)
-                _transcription.value = result.transcription
-                _translation.value = result.translation
-                _currentSampleId.value = result.sampleId
-                historyManager.addEntry(
-                    sourceText = result.transcription,
-                    translatedText = result.translation,
-                    direction = result.direction
-                )
-                _statusMessage.value = "Translation complete"
-                onTranslationSuccess(result.direction, result.translation.length, source == TranslationSource.VOICE)
-            } catch (e: GroqError.InvalidApiKey) {
-                _errorMessage.value = "Invalid Groq API key. Please check your configuration."
-            } catch (e: GroqError.TranslationFailed) {
-                _errorMessage.value = "Translation failed: ${e.message}"
-            } catch (e: GroqError.NetworkError) {
-                _errorMessage.value = "Network error: ${e.message}"
+                val direction = forced ?: detectedDirection(text, _direction.value)
+                val result = groqService.translate(text, direction, source, autoDirection = forced == null)
+                show(result, source, replaceLast)
+                if (source == TranslationSource.TYPED && !replaceLast) _typedInput.value = ""
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
-                _errorMessage.value = "Error: ${e.message}"
+                showFailure(e, source == TranslationSource.VOICE)
             } finally {
                 _isProcessing.value = false
             }
@@ -256,15 +320,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _typedInput.value = text
     }
 
-    /** Translate the typed text directly (no audio capture). */
+    /** Translate the typed text; the words decide the direction, as with speech. */
     fun submitTypedText() {
         val text = _typedInput.value.trim()
-        if (text.isEmpty()) return
-        _transcription.value = ""
-        lastInputText = text
-        lastInputSource = TranslationSource.TYPED
-        _isVoiceResult.value = false
-        translateInput(text, TranslationSource.TYPED, allowAuto = true)
+        if (text.isEmpty() || _isProcessing.value) return
+        processTextInput(text, TranslationSource.TYPED)
     }
 
     // ── Recording ───────────────────────────────────────────────────────────
@@ -280,6 +340,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (_isRecording.value) {
             stopRecordingAndProcess()
         } else {
+            AnalyticsManager.logMicTapped(pairCode)
+            ttsManager.stopSpeaking()
             startRecording()
         }
     }
@@ -290,7 +352,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         try {
             currentRecordingFile = audioRecorder.startRecording()
             _isRecording.value = true
-            _statusMessage.value = "Recording... tap again to stop"
             startRecordingTicker()
         } catch (e: Exception) {
             _errorMessage.value = "Failed to start recording: ${e.message}"
@@ -331,7 +392,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val audioFile = audioRecorder.stopRecording()
         if (audioFile == null || !audioFile.exists() || audioFile.length() == 0L) {
             audioFile?.let { audioRecorder.deleteRecording(it) }
-            _statusMessage.value = "🎤 Too short — tap Start, speak, then tap Stop."
+            _statusMessage.value = "🎤 Too short — tap the mic button, speak, then tap Stop."
             return
         }
 
@@ -343,53 +404,31 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             _isProcessing.value = true
             _errorMessage.value = null
-            _transcription.value = ""
-            _translation.value = ""
-            _currentSampleId.value = null
-            _feedbackGiven.value = null
-            _sttFeedbackGiven.value = null
 
             try {
-                // Whisper is forced to the selected source language, so detection
-                // on the transcript is best-effort — but it still catches the
-                // common case of speaking English with Creole→English selected.
-                val selected = _direction.value
-                val transcription = groqService.transcribe(audioFile, selected.sourceLanguage)
+                val fallback = _direction.value
+                // Always transcribed by the Creole engine: it writes down
+                // whichever language was actually spoken (checked with English,
+                // Spanish and Kreyòl clips), so the words can decide the direction.
+                val transcription = groqService.transcribe(audioFile, Language.CREOLE.code)
                 // gpt-transcribe declines rather than guesses: blank means "heard nothing usable".
                 if (transcription.isBlank()) throw GroqError.NothingHeard
-                _transcription.value = transcription
-                lastInputText = transcription
-                lastInputSource = TranslationSource.VOICE
-                _isVoiceResult.value = true
-                val dir = effectiveDirection(transcription, selected, allowAuto = true)
-                val result = groqService.translate(transcription, dir, TranslationSource.VOICE)
-                _translation.value = result.translation
-                _currentSampleId.value = result.sampleId
-
-                historyManager.addEntry(
-                    sourceText = result.transcription,
-                    translatedText = result.translation,
-                    direction = result.direction
+                val result = groqService.translate(
+                    transcription, detectedDirection(transcription, fallback),
+                    TranslationSource.VOICE, autoDirection = true
                 )
-
-                _statusMessage.value = "Translation complete"
-                onTranslationSuccess(result.direction, result.translation.length, true)
-            } catch (e: GroqError.InvalidApiKey) {
-                AnalyticsManager.logTranslationFailed(_direction.value.let { if (it == TranslationDirection.CREOLE_TO_ENGLISH) "ht-en" else "en-ht" }, true, "InvalidApiKey")
-                _errorMessage.value = "Invalid Groq API key. Please check your configuration."
+                _statusMessage.value = null
+                show(result, TranslationSource.VOICE, replaceLast = false)
             } catch (e: GroqError.NothingHeard) {
                 // Not a failure: the engine heard nothing it could transcribe.
                 AnalyticsManager.logSttNothingHeard()
                 _errorMessage.value = null
                 _statusMessage.value = "🎤 ${e.message}"
-            } catch (e: GroqError.TranscriptionFailed) {
-                _errorMessage.value = "Transcription failed: ${e.message}"
-            } catch (e: GroqError.TranslationFailed) {
-                _errorMessage.value = "Translation failed: ${e.message}"
-            } catch (e: GroqError.NetworkError) {
-                _errorMessage.value = "Network error: ${e.message}"
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
-                _errorMessage.value = "Error: ${e.message}"
+                _statusMessage.value = null
+                showFailure(e, isVoice = true)
             } finally {
                 _isProcessing.value = false
                 audioRecorder.deleteRecording(audioFile)
@@ -397,7 +436,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /** 👍/👎 on the current translation. Fire-and-forget; the UI locks after one tap. */
+    /** 👍/👎 on the newest bubble's translation. Fire-and-forget; the UI locks after one tap. */
     fun rateTranslation(rating: FeedbackRating, comment: String? = null) {
         val sampleId = _currentSampleId.value ?: return
         if (_feedbackGiven.value != null) return
@@ -406,27 +445,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch { groqService.sendFeedback(sampleId, rating, comment) }
     }
 
-    /** 👍/👎 on the current transcription (STT accuracy, voice results only). */
-    fun rateTranscription(rating: FeedbackRating, comment: String? = null) {
-        val sampleId = _currentSampleId.value ?: return
-        if (_sttFeedbackGiven.value != null) return
-        _sttFeedbackGiven.value = rating
-        AnalyticsManager.logSttFeedback(rating.wire)
-        viewModelScope.launch { groqService.sendFeedback(sampleId, rating, comment, FeedbackTarget.STT) }
-    }
-
-    // ── Direction ───────────────────────────────────────────────────────────
-
-    fun switchDirection() {
-        _autoDetectOverrode.value = null
-        _direction.value = when (_direction.value) {
-            TranslationDirection.CREOLE_TO_ENGLISH -> TranslationDirection.ENGLISH_TO_CREOLE
-            TranslationDirection.ENGLISH_TO_CREOLE -> TranslationDirection.CREOLE_TO_ENGLISH
-        }
-        // Swap displayed results when switching
-        val temp = _transcription.value
-        _transcription.value = _translation.value
-        _translation.value = temp
+    companion object {
+        private const val KEY_DIRECTION = "translationDirection"
+        private const val KEY_WHATS_NEW = "whatsNewSeenVersion"
+        /** Release that introduced Just talk + Spanish on Android. */
+        private const val WHATS_NEW_VERSION = "just-talk"
     }
 
     // ── TTS ─────────────────────────────────────────────────────────────────

@@ -1,0 +1,4 @@
+Just talk: one mic for both languages. Speak Kreyòl or English and the app works out which one you said.
+Conversations now show as chat bubbles, with Listen on each one. Tap ⇄ if a sentence was read the wrong way.
+New: Spanish ↔ Haitian Creole. Switch the pair with the chip at the top.
+Cleaner main screen and updated privacy details in Settings.

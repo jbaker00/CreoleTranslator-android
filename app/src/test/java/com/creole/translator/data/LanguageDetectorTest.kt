@@ -1,12 +1,15 @@
 package com.creole.translator.data
 
-import com.creole.translator.data.LanguageDetector.Language
+import com.creole.translator.data.LanguageDetector.Detected
+import com.creole.translator.model.Language
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
+/** Behaviour of the iOS LanguageDetector.swift port (word lists and thresholds identical). */
 class LanguageDetectorTest {
 
-    private fun lang(text: String) = LanguageDetector.detect(text).language
+    private fun en(text: String) = LanguageDetector.detect(text, Language.ENGLISH)
+    private fun es(text: String) = LanguageDetector.detect(text, Language.SPANISH)
 
     @Test
     fun creolePhrasesDetectedAsCreole() {
@@ -19,10 +22,10 @@ class LanguageDetectorTest {
             "Li gen anpil lajan",
             "M ap boule",
             "Èske ou ka ede m?",
-            "Se pa yon lyon fi. Se yon lyon.",
             "Konbyen sa koute?",
             "Mèsi anpil, zanmi mwen",
-        ).forEach { assertEquals("expected HT for: $it", Language.HT, lang(it)) }
+            "Kote lopital la ye?",
+        ).forEach { assertEquals("expected CREOLE for: $it", Detected.CREOLE, en(it)) }
     }
 
     @Test
@@ -36,22 +39,77 @@ class LanguageDetectorTest {
             "We are going to the school tomorrow",
             "Can you help me please?",
             "How much does this cost?",
-            "I used to live there",
-        ).forEach { assertEquals("expected EN for: $it", Language.EN, lang(it)) }
+            "Turn left at the corner.",
+        ).forEach { assertEquals("expected ENGLISH for: $it", Detected.ENGLISH, en(it)) }
     }
 
     @Test
-    fun ambiguousOrEmptyIsUnknown() {
-        listOf("", "   ", "Beautiful", "Continue", "Tired", "OK", "12345", "Paris").forEach {
-            assertEquals("expected UNKNOWN for: '$it'", Language.UNKNOWN, lang(it))
+    fun spanishWithoutKnownWordsFallsBack() {
+        // No listed Spanish word: the caller keeps the last direction used.
+        assertEquals(Detected.UNKNOWN, es("Doble a la izquierda en la esquina."))
+    }
+
+    @Test
+    fun spanishPhrasesDetectedAsSpanishInTheSpanishPair() {
+        listOf(
+            "¿Dónde está el hospital?",
+            "Hola, ¿cómo estás?",
+            "Muchas gracias por la ayuda",
+            "¿Cuánto cuesta esto?",
+            "Necesito un médico",
+        ).forEach { assertEquals("expected SPANISH for: $it", Detected.SPANISH, es(it)) }
+    }
+
+    @Test
+    fun creoleStillWinsInTheSpanishPair() {
+        // Words Creole shares with Spanish ("la", "se", "te"…) don't vote, but the rest do.
+        listOf("Kote lopital la ye?", "Mwen pa konnen", "Bonjou, kijan ou ye?").forEach {
+            assertEquals("expected CREOLE for: $it", Detected.CREOLE, es(it))
         }
     }
 
     @Test
-    fun mixedTextLeansOnTheStrongerSignal() {
-        // Garbled voice input with English bleed-through: mostly Creole tokens still win.
-        assertEquals(Language.HT, lang("Mwen pa konnen sa, put it in the trash, mwen di ou"))
-        // English sentence with one Creole word quoted stays English.
-        assertEquals(Language.EN, lang("What does the word bonjou mean in the morning?"))
+    fun oneWordDecidesOnlyWhenStrong() {
+        assertEquals(Detected.CREOLE, en("Bonjou"))
+        assertEquals(Detected.ENGLISH, en("Hello"))
+        assertEquals(Detected.SPANISH, es("Gracias"))
+        assertEquals(Detected.CREOLE, en("mèsi"))
+        assertEquals(Detected.UNKNOWN, en("Continue"))
+        assertEquals(Detected.UNKNOWN, en("Paris"))
+    }
+
+    @Test
+    fun shortPhrasesDecideOnOneNonWeakWord() {
+        assertEquals(Detected.ENGLISH, en("Go home"))
+        // One weak English word ("on" could be Creole "yon") — never enough for a short phrase.
+        assertEquals(Detected.UNKNOWN, en("on Paris"))
+    }
+
+    @Test
+    fun ambiguousOrEmptyIsUnknown() {
+        listOf("", "   ", "OK?", "12345").forEach {
+            val expected = if (it == "OK?") Detected.ENGLISH else Detected.UNKNOWN // "ok" is a strong English word
+            assertEquals("for: '$it'", expected, en(it))
+        }
+    }
+
+    @Test
+    fun codeSwitchingSplitStaysUnknown() {
+        // A 3–2-style split must not clear the strict > 60% majority.
+        assertEquals(Detected.UNKNOWN, en("Jodia fem 4 jou back to the gym"))
+    }
+
+    @Test
+    fun answerIsNeverTheThirdLanguage() {
+        // Spanish in the English pair is not "SPANISH" — the caller offers a pair switch instead.
+        val r = en("¿Dónde está el hospital?")
+        assert(r != Detected.SPANISH)
+        assertEquals(Detected.SPANISH, es("¿Dónde está el hospital?"))
+    }
+
+    @Test
+    fun decomposedAccentsCountLikeComposed() {
+        // "e" + combining grave, as some keyboards send it.
+        assertEquals(Detected.CREOLE, en("mèsi"))
     }
 }
