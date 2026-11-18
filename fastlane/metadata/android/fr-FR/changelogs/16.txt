@@ -1,0 +1,4 @@
+Parlez, tout simplement : un seul micro pour les deux langues. Parlez créole ou anglais, l'appli reconnaît la langue.
+Les conversations s'affichent en bulles, avec Écouter sur chacune. Touchez ⇄ si une phrase a été lue dans le mauvais sens.
+Nouveau : espagnol ↔ créole haïtien. Changez de paire avec le bouton en haut.
+Écran principal simplifié et informations de confidentialité mises à jour dans les Réglages.
