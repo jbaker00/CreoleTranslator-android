@@ -32,23 +32,31 @@ private val BANNER_AD_UNIT_ID = if (BuildConfig.DEBUG) TEST_BANNER_AD_UNIT_ID el
 // Adaptive anchored banner — pays significantly more than fixed BANNER (320x50)
 // and respects gesture navigation insets so ads don't sit in the swipe zone.
 //
-// AdMob "Site Behavior: Navigation" (Nov 2026, flagged on v1.1 only): ads must
-// not sit where they could be mistaken for app navigation. The banner lives in
-// its own visually separate strip — divider on top, distinct background,
-// 8dp gap above the ad — so it never reads as part of the app's controls and
+// AdMob "Site Behavior: Navigation" (Nov 8 and Nov 20 2026, sample version 1.1 only):
+// ads must not sit where they could be mistaken for app navigation. The banner
+// lives in its own visually separate strip — 24dp clear gap above it, divider
+// on top, distinct background, 12dp gap above the ad — so it never reads as
+// part of the app's controls and
 // a tap aimed at content can't land on it. Mirrors iOS ContentView's banner
 // (Divider overlay + tertiarySystemBackground).
 @Composable
 fun BannerAd(modifier: Modifier = Modifier) {
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.surfaceVariant)
-            .windowInsetsPadding(WindowInsets.navigationBars)
-    ) {
-        HorizontalDivider()
-        Spacer(Modifier.height(8.dp))
-        AdaptiveBanner()
+    // 1.13: Just talk moved the mic, "Ekri" and
+    // "Type instead" to the bottom of the screen, a few dp above this strip.
+    // Keep a clear 24dp of plain background between any app control and the
+    // ad strip on every screen, plus 12dp inside the strip above the ad.
+    Column(modifier = modifier.fillMaxWidth()) {
+        Spacer(Modifier.height(24.dp))
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+                .windowInsetsPadding(WindowInsets.navigationBars)
+        ) {
+            HorizontalDivider()
+            Spacer(Modifier.height(12.dp))
+            AdaptiveBanner()
+        }
     }
 }
 

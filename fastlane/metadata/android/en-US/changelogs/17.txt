@@ -1,0 +1,1 @@
+Small layout fix: more space between the buttons at the bottom of the screen and the banner.

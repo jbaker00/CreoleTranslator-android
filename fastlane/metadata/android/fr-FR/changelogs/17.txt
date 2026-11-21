@@ -1,0 +1,1 @@
+Petite correction de mise en page : plus d'espace entre les boutons en bas de l'écran et la bannière.
