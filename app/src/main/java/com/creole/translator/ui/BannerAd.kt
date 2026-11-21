@@ -32,7 +32,7 @@ private val BANNER_AD_UNIT_ID = if (BuildConfig.DEBUG) TEST_BANNER_AD_UNIT_ID el
 // Adaptive anchored banner — pays significantly more than fixed BANNER (320x50)
 // and respects gesture navigation insets so ads don't sit in the swipe zone.
 //
-// AdMob "Site Behavior: Navigation" (flagged Nov 8 and again Nov 20 on 1.12):
+// AdMob "Site Behavior: Navigation" (Nov 8 and Nov 20 2026, sample version 1.1 only):
 // ads must not sit where they could be mistaken for app navigation. The banner
 // lives in its own visually separate strip — 24dp clear gap above it, divider
 // on top, distinct background, 12dp gap above the ad — so it never reads as
@@ -41,7 +41,7 @@ private val BANNER_AD_UNIT_ID = if (BuildConfig.DEBUG) TEST_BANNER_AD_UNIT_ID el
 // (Divider overlay + tertiarySystemBackground).
 @Composable
 fun BannerAd(modifier: Modifier = Modifier) {
-    // 1.12 (Nov 20) was flagged again: Just talk moved the mic, "Ekri" and
+    // 1.13: Just talk moved the mic, "Ekri" and
     // "Type instead" to the bottom of the screen, a few dp above this strip.
     // Keep a clear 24dp of plain background between any app control and the
     // ad strip on every screen, plus 12dp inside the strip above the ad.
