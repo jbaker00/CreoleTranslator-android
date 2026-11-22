@@ -89,6 +89,7 @@ dependencies {
     implementation(libs.play.services.ads)
     implementation(libs.play.review)
     implementation(libs.ump)
+    implementation(libs.play.age.signals)
     implementation(libs.androidx.fragment.ktx)
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.analytics)

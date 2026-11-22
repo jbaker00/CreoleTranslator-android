@@ -4,7 +4,6 @@ import android.app.Activity
 import android.content.Context
 import android.os.SystemClock
 import com.google.android.gms.ads.AdError
-import com.google.android.gms.ads.AdRequest
 import com.google.android.gms.ads.FullScreenContentCallback
 import com.google.android.gms.ads.LoadAdError
 import com.google.android.gms.ads.interstitial.InterstitialAd
@@ -82,7 +81,7 @@ class InterstitialAdManager(private val context: Context) {
         InterstitialAd.load(
             context,
             AD_UNIT_ID,
-            AdRequest.Builder().build(),
+            AdRequests.build(),
             object : InterstitialAdLoadCallback() {
                 override fun onAdLoaded(ad: InterstitialAd) {
                     interstitialAd = ad

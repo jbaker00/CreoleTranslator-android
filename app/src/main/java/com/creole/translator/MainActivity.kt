@@ -24,6 +24,7 @@ import com.google.android.ump.UserMessagingPlatform
 import com.google.android.play.core.review.ReviewManagerFactory
 import com.creole.translator.data.AnalyticsManager
 import com.creole.translator.data.AppAvailabilityManager
+import com.creole.translator.ui.AgeSignalsGate
 import com.creole.translator.ui.AppDisabledScreen
 import com.creole.translator.ui.ConsentManager
 import com.creole.translator.ui.HistoryScreen
@@ -92,8 +93,11 @@ class MainActivity : ComponentActivity() {
             }
         })
 
-        // UMP consent must be requested BEFORE MobileAds.initialize per Google
-        requestConsentAndInitAds()
+        // Age band from an earlier launch first, so the first ad request is
+        // right; then ask Play (mandatory-sharing regions only, max 3 s) before
+        // the UMP flow. UMP consent must be requested BEFORE MobileAds.initialize.
+        AgeSignalsGate.applyCached(this)
+        AgeSignalsGate.refresh(this) { if (!isFinishing && !isDestroyed) requestConsentAndInitAds() }
 
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {

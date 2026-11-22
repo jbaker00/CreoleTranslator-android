@@ -4,7 +4,6 @@ import android.app.Activity
 import android.content.Context
 import com.creole.translator.BuildConfig
 import com.google.android.gms.ads.AdError
-import com.google.android.gms.ads.AdRequest
 import com.google.android.gms.ads.FullScreenContentCallback
 import com.google.android.gms.ads.LoadAdError
 import com.google.android.gms.ads.rewarded.RewardedAd
@@ -40,7 +39,7 @@ class RewardedAdManager(private val context: Context) {
         RewardedAd.load(
             context,
             AD_UNIT_ID,
-            AdRequest.Builder().build(),
+            AdRequests.build(),
             object : RewardedAdLoadCallback() {
                 override fun onAdLoaded(ad: RewardedAd) {
                     isLoading = false

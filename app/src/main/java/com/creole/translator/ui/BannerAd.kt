@@ -19,7 +19,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.creole.translator.BuildConfig
 import com.google.android.gms.ads.AdListener
-import com.google.android.gms.ads.AdRequest
 import com.google.android.gms.ads.AdSize
 import com.google.android.gms.ads.AdView
 import com.google.android.gms.ads.LoadAdError
@@ -84,7 +83,7 @@ private fun AdaptiveBanner() {
                         Log.d("BannerAd", "Loaded adaptive banner ${adaptiveSize.width}x${adaptiveSize.height}")
                     }
                 }
-                loadAd(AdRequest.Builder().build())
+                loadAd(AdRequests.build())
             }
         },
         update = { adView ->
@@ -94,7 +93,7 @@ private fun AdaptiveBanner() {
             )
             if (adView.adSize?.width != adaptiveSize.width || adView.adSize?.height != adaptiveSize.height) {
                 adView.setAdSize(adaptiveSize)
-                adView.loadAd(AdRequest.Builder().build())
+                adView.loadAd(AdRequests.build())
             }
         }
     )
